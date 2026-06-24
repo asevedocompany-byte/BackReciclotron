@@ -1,0 +1,83 @@
+import { getLegacyPool } from "../connection.js";
+import type { QwClient } from "../schema.js"; 
+
+export async function findAllClientes(filters?: {
+  search?: string;
+  ativo?: boolean;
+  limit?: number;
+  offset?: number;
+}): Promise<QwClient[]> {
+  const pool = getLegacyPool();
+  if (!pool) return [];
+
+  const limit = filters?.limit ?? 50;
+  const offset = filters?.offset ?? 0;
+  const params: unknown[] = [];
+
+  let sql = "SELECT * FROM qwclient WHERE 1=1";
+
+  if (filters?.search) {
+    sql += " AND (firstname LIKE ? OR lastname LIKE ? OR email LIKE ? OR cpf LIKE ?)";
+    const term = `%${filters.search}%`;
+    params.push(term, term, term, term);
+  }
+
+  if (filters?.ativo !== undefined) {
+    sql += " AND cact = ?";
+    params.push(filters.ativo ? 1 : 0);
+  }
+
+  sql += " ORDER BY datesince DESC LIMIT ? OFFSET ?";
+  params.push(limit, offset);
+
+  console.log('[findAllClientes] Executando query:', sql.replace(/\s+/g, ' '), 'com parâmetros:', params);
+  const [rows] = await pool.query(sql, params);
+  console.log(`[findAllClientes] Query retornou ${Array.isArray(rows) ? rows.length : 0} registros.`);
+  if (Array.isArray(rows)) {
+    console.log('[findAllClientes] Primeiros 3 registros brutos do banco:\n', JSON.stringify(rows.slice(0, 3), null, 2));
+  }
+  return rows as QwClient[];
+}
+
+export async function findClienteById(memberid: number): Promise<QwClient | null> {
+  console.log(`[findClienteById] Buscando cliente com ID/memberid: ${memberid}`);
+  const pool = getLegacyPool();
+  if (!pool) return null;
+
+  const [rows] = await pool.query(
+    "SELECT * FROM qwclient WHERE memberid = ? LIMIT 1",
+    [memberid]
+  );
+  const list = rows as QwClient[];
+  console.log(`[findClienteById] Encontrado? ${list.length > 0}`);
+  if (list.length > 0) {
+    console.log('[findClienteById] Registro bruto do banco:\n', JSON.stringify(list[0], null, 2));
+  }
+  return list[0] ?? null;
+}
+
+export async function countClientes(filters?: {
+  search?: string;
+  ativo?: boolean;
+}): Promise<number> {
+  const pool = getLegacyPool();
+  if (!pool) return 0;
+
+  const params: unknown[] = [];
+  let sql = "SELECT COUNT(*) AS total FROM qwclient WHERE 1=1";
+
+  if (filters?.search) {
+    sql += " AND (firstname LIKE ? OR lastname LIKE ? OR email LIKE ? OR cpf LIKE ?)";
+    const term = `%${filters.search}%`;
+    params.push(term, term, term, term);
+  }
+
+  if (filters?.ativo !== undefined) {
+    sql += " AND cact = ?";
+    params.push(filters.ativo ? 1 : 0);
+  }
+
+  const [rows] = await pool.query(sql, params);
+  const result = rows as Array<{ total: number }>;
+  return result[0]?.total ?? 0;
+}
