@@ -10,7 +10,8 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "test:sms": "tsx scripts/test-sms-sns.ts"
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.1075.0",

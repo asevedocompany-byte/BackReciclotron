@@ -42,7 +42,12 @@ export interface CampaignRepository {
 }
 export interface CampaignRecipientRepository {
     createMany(recipients: Omit<CampaignRecipient, "id">[]): Promise<void>;
+    upsertMany(recipients: Omit<CampaignRecipient, "id">[]): Promise<void>;
+    upsert(recipient: Omit<CampaignRecipient, "id">): Promise<CampaignRecipient>;
     findByCampaign(campaignId: string): Promise<CampaignRecipient[]>;
+    findByIds(ids: string[]): Promise<CampaignRecipient[]>;
+    findByCampaignAndStatus(campaignId: string, status: CampaignRecipient["status"]): Promise<CampaignRecipient[]>;
+    deleteByCampaign(campaignId: string): Promise<void>;
 }
 export interface AudienceSegmentRepository {
     findAll(): Promise<AudienceSegment[]>;

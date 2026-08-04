@@ -11,8 +11,6 @@ export async function findAllLojasParceiras(filters?: {
   const pool = getLegacyPool();
   if (!pool) return [];
 
-  const limit = filters?.limit ?? 50;
-  const offset = filters?.offset ?? 0;
   const params: unknown[] = [];
 
   let sql = `
@@ -33,8 +31,12 @@ export async function findAllLojasParceiras(filters?: {
     params.push(filters.ativa ? 1 : 0);
   }
 
-  sql += " ORDER BY c.empresa ASC LIMIT ? OFFSET ?";
-  params.push(limit, offset);
+  sql += " ORDER BY c.empresa ASC";
+
+  if (filters?.limit !== undefined) {
+    sql += " LIMIT ? OFFSET ?";
+    params.push(filters.limit, filters.offset ?? 0);
+  }
 
   console.log('[findAllLojasParceiras] Executando query:', sql.replace(/\s+/g, ' '), 'com parâmetros:', params);
   const [rows] = await pool.query(sql, params);
@@ -137,4 +139,3 @@ export async function updateLojaParceira(
   console.log(`[updateLojaParceira] Linhas afetadas: ${affectedRows}`);
   return affectedRows > 0;
 }
-

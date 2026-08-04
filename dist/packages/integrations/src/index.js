@@ -1,8 +1,3 @@
-export class MockEmailProvider {
-    async sendCampaign(input) {
-        return { providerMessageId: `email_${Date.now()}`, accepted: input.recipients.length };
-    }
-}
 export class MockSmsProvider {
     async estimateCost(input) {
         const units = Math.max(1, Math.ceil(input.message.length / 160));

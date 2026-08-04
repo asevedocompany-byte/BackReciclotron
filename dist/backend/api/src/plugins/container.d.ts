@@ -1,11 +1,16 @@
 import { RepositoryRegistry, LegacyDbAdapter } from "@reciclotron/db";
-import type { EmailProvider, SmsProvider } from "@reciclotron/domain";
+import type { SmsProvider } from "@reciclotron/domain";
+import { EndUserRepository as LegacyEndUserRepository } from "../repositories/end-user.repository.js";
+import { CampaignEmailQueueService } from "../services/email/email-campaign-queue.service.js";
+import { SmsCampaignQueueService } from "../services/sms/sms-campaign-queue.service.js";
 declare module "fastify" {
     interface FastifyInstance {
         container: {
             repositories: RepositoryRegistry;
+            legacyEndUsers: LegacyEndUserRepository;
+            emailCampaignQueue: CampaignEmailQueueService;
+            smsCampaignQueue: SmsCampaignQueueService;
             providers: {
-                email: EmailProvider;
                 sms: SmsProvider;
             };
             legacyDb: LegacyDbAdapter;

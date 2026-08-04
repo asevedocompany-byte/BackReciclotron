@@ -18,6 +18,12 @@ export class CampaignController {
     return reply.send(await service.list());
   }
 
+  async getQuotaBilling(request: FastifyRequest, reply: FastifyReply) {
+    console.info("[CampaignController] getQuotaBilling called");
+    const service = this.createService(request);
+    return reply.send(await service.getQuotaAndBilling());
+  }
+
   async create(request: FastifyRequest, reply: FastifyReply) {
     console.info("[CampaignController] create called");
     const service = this.createService(request);
@@ -38,12 +44,34 @@ export class CampaignController {
       recipientIdsTypes: payload.recipientIds?.slice(0, 5).map((id) => typeof id) ?? []
     });
     const { recipientIds } = payload;
-    return reply.send(await service.send(request.params.id, recipientIds));
+    return reply.code(202).send(await service.send(request.params.id, recipientIds));
   }
 
   async getRecipients(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
     console.info("[CampaignController] getRecipients called", { campaignId: request.params.id });
     const service = this.createService(request);
     return reply.send(await service.getRecipients(request.params.id));
+  }
+
+  async getStatus(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
+    console.info("[CampaignController] getStatus called", { campaignId: request.params.id });
+    const service = this.createService(request);
+    return reply.send(await service.getDispatchStatus(request.params.id));
+  }
+
+  async streamStatus(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
+    const campaignId = request.params.id;
+    console.info("[CampaignController] streamStatus deprecated", { campaignId });
+    return reply.code(410).send({
+      message: "Fluxo SSE desativado. Use a listagem e refresh manual."
+    });
+  }
+
+  async streamJobStatus(request: FastifyRequest<{ Params: { jobId: string } }>, reply: FastifyReply) {
+    const jobId = request.params.jobId;
+    console.info("[CampaignController] streamJobStatus deprecated", { jobId });
+    return reply.code(410).send({
+      message: "Fluxo SSE desativado. Use a listagem e refresh manual."
+    });
   }
 }

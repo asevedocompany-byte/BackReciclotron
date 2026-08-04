@@ -222,6 +222,7 @@ export declare const campaignSchema: z.ZodObject<{
     status: z.ZodEnum<["draft", "scheduled", "sent"]>;
     subject: z.ZodOptional<z.ZodString>;
     message: z.ZodString;
+    attachments: z.ZodDefault<z.ZodArray<z.ZodString, "many">>;
     segmentId: z.ZodDefault<z.ZodNullable<z.ZodString>>;
     estimatedCost: z.ZodDefault<z.ZodNumber>;
     providerMessageId: z.ZodDefault<z.ZodNullable<z.ZodString>>;
@@ -234,6 +235,7 @@ export declare const campaignSchema: z.ZodObject<{
     id: string;
     name: string;
     channel: "email" | "sms";
+    attachments: string[];
     segmentId: string | null;
     estimatedCost: number;
     providerMessageId: string | null;
@@ -248,6 +250,7 @@ export declare const campaignSchema: z.ZodObject<{
     name: string;
     channel: "email" | "sms";
     subject?: string | undefined;
+    attachments?: string[] | undefined;
     segmentId?: string | null | undefined;
     estimatedCost?: number | undefined;
     providerMessageId?: string | null | undefined;
@@ -258,26 +261,32 @@ export declare const campaignRecipientSchema: z.ZodObject<{
     campaignId: z.ZodString;
     legacyId: z.ZodNumber;
     email: z.ZodString;
-    status: z.ZodEnum<["sent", "failed"]>;
+    phone: z.ZodDefault<z.ZodNullable<z.ZodString>>;
+    recipientName: z.ZodDefault<z.ZodNullable<z.ZodString>>;
+    status: z.ZodEnum<["sent", "failed", "pending"]>;
     messageId: z.ZodDefault<z.ZodNullable<z.ZodString>>;
     errorReason: z.ZodDefault<z.ZodNullable<z.ZodString>>;
     sentAt: z.ZodString;
 }, "strip", z.ZodTypeAny, {
-    status: "sent" | "failed";
+    status: "sent" | "failed" | "pending";
     email: string;
     id: string;
+    phone: string | null;
     sentAt: string;
     campaignId: string;
     legacyId: number;
+    recipientName: string | null;
     messageId: string | null;
     errorReason: string | null;
 }, {
-    status: "sent" | "failed";
+    status: "sent" | "failed" | "pending";
     email: string;
     id: string;
     sentAt: string;
     campaignId: string;
     legacyId: number;
+    phone?: string | null | undefined;
+    recipientName?: string | null | undefined;
     messageId?: string | null | undefined;
     errorReason?: string | null | undefined;
 }>;
@@ -494,6 +503,7 @@ export declare const createCampaignSchema: z.ZodObject<Omit<{
     status: z.ZodEnum<["draft", "scheduled", "sent"]>;
     subject: z.ZodOptional<z.ZodString>;
     message: z.ZodString;
+    attachments: z.ZodDefault<z.ZodArray<z.ZodString, "many">>;
     segmentId: z.ZodDefault<z.ZodNullable<z.ZodString>>;
     estimatedCost: z.ZodDefault<z.ZodNumber>;
     providerMessageId: z.ZodDefault<z.ZodNullable<z.ZodString>>;
@@ -505,6 +515,7 @@ export declare const createCampaignSchema: z.ZodObject<Omit<{
     message: string;
     name: string;
     channel: "email" | "sms";
+    attachments: string[];
     segmentId: string | null;
     estimatedCost: number;
     status?: "draft" | "scheduled" | "sent" | undefined;
@@ -516,6 +527,7 @@ export declare const createCampaignSchema: z.ZodObject<Omit<{
     channel: "email" | "sms";
     status?: "draft" | "scheduled" | "sent" | undefined;
     subject?: string | undefined;
+    attachments?: string[] | undefined;
     segmentId?: string | null | undefined;
     estimatedCost?: number | undefined;
     recipientIds?: (string | number)[] | undefined;

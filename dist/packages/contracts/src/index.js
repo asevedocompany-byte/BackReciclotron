@@ -13,8 +13,19 @@ export const collectionPointSchema = auditSchema.extend({ id, name: z.string().m
 export const partnerStoreSchema = auditSchema.extend({ id, name: z.string().min(2), city: z.string().min(2), description: z.string().optional().default("Sem descrição"), partnershipDetails: z.string().optional(), active: z.boolean().default(true), cnpj: z.string().optional().nullable(), email: z.string().optional().nullable(), address: z.string().optional().nullable(), state: z.string().optional().nullable(), pinLoja: z.string().optional().nullable(), categoryName: z.string().optional().nullable(), categoria: z.number().optional().nullable(), cStoreId: z.number().optional().nullable(), logoUrl: z.string().optional().nullable() });
 export const pointsLedgerEntrySchema = auditSchema.extend({ id, userId: id, type: ledgerTypeSchema, points: z.number().int().positive(), description: z.string().min(2), source: z.string().min(2) });
 export const audienceSegmentSchema = auditSchema.extend({ id, name: z.string().min(2), description: z.string().min(2), city: z.string().optional(), status: statusSchema.optional(), minimumPoints: z.number().int().optional(), maximumPoints: z.number().int().optional() });
-export const campaignSchema = auditSchema.extend({ id, name: z.string().min(2), channel: campaignChannelSchema, status: campaignStatusSchema, subject: z.string().optional(), message: z.string().min(2), segmentId: id.nullable().default(null), estimatedCost: z.number().nonnegative().default(0), providerMessageId: z.string().nullable().default(null), sentAt: z.string().nullable().default(null) });
-export const campaignRecipientSchema = z.object({ id, campaignId: id, legacyId: z.number().int(), email: z.string().email(), status: z.enum(["sent", "failed"]), messageId: z.string().nullable().default(null), errorReason: z.string().nullable().default(null), sentAt: z.string() });
+export const campaignSchema = auditSchema.extend({ id, name: z.string().min(2), channel: campaignChannelSchema, status: campaignStatusSchema, subject: z.string().optional(), message: z.string().min(2), attachments: z.array(z.string()).default([]), segmentId: id.nullable().default(null), estimatedCost: z.number().nonnegative().default(0), providerMessageId: z.string().nullable().default(null), sentAt: z.string().nullable().default(null) });
+export const campaignRecipientSchema = z.object({
+    id,
+    campaignId: id,
+    legacyId: z.number().int(),
+    email: z.string().email(),
+    phone: z.string().nullable().default(null),
+    recipientName: z.string().nullable().default(null),
+    status: z.enum(["sent", "failed", "pending"]),
+    messageId: z.string().nullable().default(null),
+    errorReason: z.string().nullable().default(null),
+    sentAt: z.string()
+});
 export const automationRuleSchema = auditSchema.extend({ id, name: z.string().min(2), trigger: ruleTriggerSchema, channel: campaignChannelSchema, template: z.string().min(2), active: z.boolean().default(true), segmentId: id.nullable().default(null) });
 export const loginSchema = z.object({ email: z.string().email(), password: z.string().min(4) });
 export const createCollectionPointSchema = collectionPointSchema.omit({ id: true, createdAt: true, updatedAt: true });

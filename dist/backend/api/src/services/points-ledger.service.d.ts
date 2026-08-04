@@ -4,7 +4,12 @@ export declare class PointsLedgerService {
     private app;
     private repository;
     constructor(app: FastifyInstance);
-    list(): Promise<any[]>;
+    list(filters?: {
+        userId?: string;
+        limit?: number;
+        offset?: number;
+    }): Promise<any[]>;
+    listLatestByUser(): Promise<any[]>;
     create(input: CreateLedgerEntryInput): Promise<{
         id: string;
         createdAt: string;

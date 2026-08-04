@@ -9,8 +9,7 @@ import { AudienceSegmentController } from "../controllers/audience-segment.contr
 import { CampaignController } from "../controllers/campaign.controller.js";
 import { AutomationRuleController } from "../controllers/automation-rule.controller.js";
 import { MetricsController } from "../controllers/metrics.controller.js";
-import { EmailTemplateController } from "../controllers/email-template.controller.js";
-import { SmsTemplateController } from "../controllers/sms-template.controller.js";
+import { SmsController } from "../controllers/sms.controller.js";
 
 export async function registerRoutes(app: FastifyInstance) {
   const auth = new AuthController();
@@ -23,8 +22,7 @@ export async function registerRoutes(app: FastifyInstance) {
   const campaigns = new CampaignController();
   const rules = new AutomationRuleController();
   const metrics = new MetricsController();
-  const emailTemplates = new EmailTemplateController();
-  const smsTemplates = new SmsTemplateController();
+  const sms = new SmsController();
 
   app.get('/health', async () => ({ ok: true }));
   app.post('/auth/login', auth.login.bind(auth));
@@ -46,17 +44,20 @@ export async function registerRoutes(app: FastifyInstance) {
     privateApp.patch('/partner-stores/:id', partnerStores.update.bind(partnerStores));
     privateApp.delete('/partner-stores/:id', partnerStores.delete.bind(partnerStores));
     privateApp.get('/points-ledger', pointsLedger.list.bind(pointsLedger));
+    privateApp.get('/points-ledger/latest-by-user', pointsLedger.latestByUser.bind(pointsLedger));
     privateApp.post('/points-ledger', pointsLedger.create.bind(pointsLedger));
     privateApp.get('/audience-segments', segments.list.bind(segments));
     privateApp.post('/audience-segments', segments.create.bind(segments));
     privateApp.get('/campaigns', campaigns.list.bind(campaigns));
+    privateApp.get('/campaigns/quota-billing', campaigns.getQuotaBilling.bind(campaigns));
     privateApp.post('/campaigns', campaigns.create.bind(campaigns));
     privateApp.post('/campaigns/:id/send', campaigns.send.bind(campaigns));
+    privateApp.get('/campaigns/:id/status', campaigns.getStatus.bind(campaigns));
+    privateApp.get('/campaigns/:id/status/stream', campaigns.streamStatus.bind(campaigns));
+    privateApp.get('/campaigns/:jobId/stream', campaigns.streamJobStatus.bind(campaigns));
     privateApp.get('/campaigns/:id/recipients', campaigns.getRecipients.bind(campaigns));
-    privateApp.get('/email-templates', emailTemplates.list.bind(emailTemplates));
-    privateApp.post('/email-templates', emailTemplates.create.bind(emailTemplates));
-    privateApp.get('/sms-templates', smsTemplates.list.bind(smsTemplates));
-    privateApp.post('/sms-templates', smsTemplates.create.bind(smsTemplates));
+    privateApp.post('/sms/recipients/resolve', sms.resolveRecipients.bind(sms));
+    privateApp.post('/sms/dispatch/preview', sms.previewDispatch.bind(sms));
     privateApp.get('/automation-rules', rules.list.bind(rules));
     privateApp.post('/automation-rules', rules.create.bind(rules));
     privateApp.get('/automation-rules/:id', rules.getById.bind(rules));

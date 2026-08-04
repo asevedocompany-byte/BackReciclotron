@@ -277,8 +277,14 @@ declare class PrismaCampaignRepository implements CampaignRepository {
     update(campaign: Campaign): Promise<Campaign>;
 }
 declare class PrismaCampaignRecipientRepository implements CampaignRecipientRepository {
+    private mapRow;
     createMany(recipients: Omit<CampaignRecipient, "id">[]): Promise<void>;
+    upsertMany(recipients: Omit<CampaignRecipient, "id">[]): Promise<void>;
+    upsert(recipient: Omit<CampaignRecipient, "id">): Promise<CampaignRecipient>;
     findByCampaign(campaignId: string): Promise<CampaignRecipient[]>;
+    findByIds(ids: string[]): Promise<CampaignRecipient[]>;
+    findByCampaignAndStatus(campaignId: string, status: CampaignRecipient["status"]): Promise<CampaignRecipient[]>;
+    deleteByCampaign(campaignId: string): Promise<void>;
 }
 export declare class RepositoryRegistry {
     adminUsers: InMemoryAdminUserRepository;

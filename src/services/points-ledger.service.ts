@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { CreateLedgerEntryInput } from "@reciclotron/contracts";
 import { AppError } from "../shared/errors/app-error.js";
+import { EndUserService } from "./end-user.service.js";
 import { PointsLedgerRepository } from "../repositories/points-ledger.repository.js";
 
 export class PointsLedgerService {
@@ -10,9 +11,13 @@ export class PointsLedgerService {
     this.repository = new PointsLedgerRepository();
   }
 
-  list() {
+  list(filters: { userId?: string; limit?: number; offset?: number } = {}) {
     console.log('[PointsLedgerService] Encaminhando chamada de listagem de movimentações para o repositório');
-    return this.repository.findAll();
+    return this.repository.findAll(filters);
+  }
+
+  listLatestByUser() {
+    return this.repository.findLatestByUser();
   }
 
   async create(input: CreateLedgerEntryInput) {
@@ -21,6 +26,8 @@ export class PointsLedgerService {
     const nextBalance = input.type === "credit" ? user.pointsBalance + input.points : user.pointsBalance - input.points;
     if (nextBalance < 0) throw new AppError(400, "Saldo insuficiente para débito.");
     await this.app.container.repositories.endUsers.update({ ...user, pointsBalance: nextBalance });
+    PointsLedgerRepository.invalidateBalanceCache(Number(input.userId));
+    EndUserService.invalidateListCache();
     return this.app.container.repositories.pointsLedger.create(input);
   }
 }

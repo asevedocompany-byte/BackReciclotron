@@ -4,8 +4,6 @@ export async function findAllLojasParceiras(filters) {
     const pool = getLegacyPool();
     if (!pool)
         return [];
-    const limit = filters?.limit ?? 50;
-    const offset = filters?.offset ?? 0;
     const params = [];
     let sql = `
     SELECT c.*, cat.catname
@@ -22,8 +20,11 @@ export async function findAllLojasParceiras(filters) {
         sql += " AND c.status = ?";
         params.push(filters.ativa ? 1 : 0);
     }
-    sql += " ORDER BY c.empresa ASC LIMIT ? OFFSET ?";
-    params.push(limit, offset);
+    sql += " ORDER BY c.empresa ASC";
+    if (filters?.limit !== undefined) {
+        sql += " LIMIT ? OFFSET ?";
+        params.push(filters.limit, filters.offset ?? 0);
+    }
     console.log('[findAllLojasParceiras] Executando query:', sql.replace(/\s+/g, ' '), 'com parâmetros:', params);
     const [rows] = await pool.query(sql, params);
     console.log(`[findAllLojasParceiras] Query retornou ${Array.isArray(rows) ? rows.length : 0} registros.`);

@@ -1,6 +1,5 @@
 import type { FastifyInstance } from "fastify";
 import type { Campaign } from "@reciclotron/contracts";
-import { getConfig } from "@reciclotron/config";
 import { AppError } from "../../shared/errors/app-error.js";
 import { AmazonSesEmailAdapter } from "./email-ses.adapter.js";
 
@@ -21,28 +20,24 @@ function extractEmail(value: string | null | undefined) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null;
 }
 
+function throwIfAborted(signal?: AbortSignal) {
+  if (!signal?.aborted) return;
+  throw signal.reason instanceof Error ? signal.reason : new Error("Operação cancelada por timeout.");
+}
+
 export class EmailDispatchService {
   private readonly sesAdapter = new AmazonSesEmailAdapter();
+  private readonly maxAttempts = 3;
+  private readonly baseRetryDelayMs = 250;
+  private readonly minSesAttemptIntervalMs = 100;
+  private lastSesAttemptAt = 0;
 
   constructor(private readonly app: FastifyInstance) {}
 
-  async send(campaign: Campaign, recipients: RecipientInput[]): Promise<EmailDispatchResult> {
+  async send(campaign: Campaign, recipients: RecipientInput[], signal?: AbortSignal): Promise<EmailDispatchResult> {
     console.info("[EmailDispatchService] send called", {
       campaignId: campaign.id,
       recipientsCount: recipients.length
-    });
-    const config = getConfig();
-    const hasSesCredentials = Boolean(config.AWS_ACCESS_KEY_ID && config.AWS_SECRET_ACCESS_KEY);
-    const shouldUseSes = Boolean(config.SES_FROM_EMAIL && hasSesCredentials);
-    console.info("[EmailDispatchService] provider resolved", {
-      campaignId: campaign.id,
-      emailProvider: config.EMAIL_PROVIDER,
-      shouldUseSes,
-      awsRegion: config.AWS_REGION,
-      hasAwsCredentials: hasSesCredentials,
-      fromEmail: config.SES_FROM_EMAIL ?? null,
-      replyToEmail: config.SES_REPLY_TO_EMAIL ?? null,
-      configurationSet: config.SES_CONFIGURATION_SET ?? null
     });
     const emails = recipients.map((recipient) => extractEmail(recipient.email)).filter((email): email is string => Boolean(email));
 
@@ -50,41 +45,19 @@ export class EmailDispatchService {
       throw new AppError(400, "Nenhum destinatario valido encontrado para a campanha.");
     }
 
-    if (!shouldUseSes) {
-      console.info("[EmailDispatchService] using mock email provider", {
-        campaignId: campaign.id,
-        recipientsCount: emails.length
-      });
-      const response = await this.app.container.providers.email.sendCampaign({
-        subject: campaign.subject,
-        message: campaign.message,
-        recipients: emails
-      });
-
-      return {
-        providerMessageId: response.providerMessageId,
-        accepted: response.accepted,
-        rejected: Math.max(0, emails.length - response.accepted)
-      };
-    }
-
     let accepted = 0;
     let rejected = 0;
     let providerMessageId = "";
 
     for (const recipient of emails) {
-      console.info("[EmailDispatchService] sending via SES", {
-        campaignId: campaign.id,
-        recipient,
-        subject: campaign.subject ?? null,
-        messageLength: campaign.message.length
-      });
       try {
-        const response = await this.sesAdapter.sendEmail({
+        const response = await this.sendWithRetry({
+          campaignId: campaign.id,
           recipient,
           subject: campaign.subject,
           message: campaign.message,
-          campaignId: campaign.id
+          attachments: campaign.attachments ?? [],
+          signal
         });
 
         accepted += 1;
@@ -104,8 +77,13 @@ export class EmailDispatchService {
       }
     }
 
-    if (accepted === 0) {
-      throw new AppError(502, "SES nao aceitou nenhum destinatario da campanha.");
+    if (rejected > 0) {
+      throw new AppError(502, "SES rejeitou parte do disparo da campanha.", {
+        campaignId: campaign.id,
+        accepted,
+        rejected,
+        providerMessageId: providerMessageId || null
+      });
     }
 
     console.info("[EmailDispatchService] send completed", {
@@ -119,5 +97,113 @@ export class EmailDispatchService {
       accepted,
       rejected
     };
+  }
+
+  private async sendWithRetry(input: {
+    campaignId: string;
+    recipient: string;
+    subject?: string;
+    message: string;
+    attachments?: string[];
+    signal?: AbortSignal;
+  }): Promise<{ messageId: string }> {
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= this.maxAttempts; attempt += 1) {
+      throwIfAborted(input.signal);
+      console.info("[EmailDispatchService] sending via SES", {
+        campaignId: input.campaignId,
+        recipient: input.recipient,
+        subject: input.subject ?? null,
+        messageLength: input.message.length,
+        attempt,
+        maxAttempts: this.maxAttempts
+      });
+
+      try {
+        await this.waitForSesRateLimit(input.signal);
+        return await this.sesAdapter.sendEmail({
+          recipient: input.recipient,
+          subject: input.subject,
+          message: input.message,
+          attachments: input.attachments ?? [],
+          campaignId: input.campaignId,
+          signal: input.signal
+        });
+      } catch (error) {
+        lastError = error;
+        const errorSummary = error instanceof Error ? { name: error.name, message: error.message } : String(error);
+        console.error("[EmailDispatchService] SES attempt failed", {
+          campaignId: input.campaignId,
+          recipient: input.recipient,
+          attempt,
+          maxAttempts: this.maxAttempts,
+          error: errorSummary
+        });
+
+        if (attempt < this.maxAttempts) {
+          const delayMs = this.baseRetryDelayMs * (2 ** (attempt - 1));
+          console.info("[EmailDispatchService] retrying SES send", {
+            campaignId: input.campaignId,
+            recipient: input.recipient,
+            nextAttempt: attempt + 1,
+            delayMs
+          });
+          await new Promise<void>((resolve, reject) => {
+            const timer = setTimeout(() => {
+              if (input.signal) {
+                input.signal.removeEventListener("abort", onAbort);
+              }
+              resolve();
+            }, delayMs);
+
+            const onAbort = () => {
+              clearTimeout(timer);
+              reject(input.signal?.reason ?? new Error("Operação cancelada por timeout."));
+            };
+
+            if (input.signal) {
+              if (input.signal.aborted) {
+                clearTimeout(timer);
+                reject(input.signal.reason ?? new Error("Operação cancelada por timeout."));
+                return;
+              }
+              input.signal.addEventListener("abort", onAbort, { once: true });
+            }
+          });
+        }
+      }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error(String(lastError ?? "Falha ao enviar email via SES."));
+  }
+
+  private async waitForSesRateLimit(signal?: AbortSignal) {
+    const elapsedMs = Date.now() - this.lastSesAttemptAt;
+    const delayMs = Math.max(0, this.minSesAttemptIntervalMs - elapsedMs);
+
+    if (delayMs > 0) {
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          signal?.removeEventListener("abort", onAbort);
+          resolve();
+        }, delayMs);
+        const onAbort = () => {
+          clearTimeout(timer);
+          reject(signal?.reason ?? new Error("Operação cancelada por timeout."));
+        };
+
+        if (signal) {
+          if (signal.aborted) {
+            onAbort();
+            return;
+          }
+          signal.addEventListener("abort", onAbort, { once: true });
+        }
+      });
+    }
+
+    throwIfAborted(signal);
+    this.lastSesAttemptAt = Date.now();
   }
 }

@@ -3,8 +3,6 @@ export async function findAllClientes(filters) {
     const pool = getLegacyPool();
     if (!pool)
         return [];
-    const limit = filters?.limit ?? 50;
-    const offset = filters?.offset ?? 0;
     const params = [];
     let sql = "SELECT * FROM qwclient WHERE 1=1";
     if (filters?.search) {
@@ -16,8 +14,13 @@ export async function findAllClientes(filters) {
         sql += " AND cact = ?";
         params.push(filters.ativo ? 1 : 0);
     }
-    sql += " ORDER BY datesince DESC LIMIT ? OFFSET ?";
-    params.push(limit, offset);
+    sql += " ORDER BY datesince DESC";
+    // Paginação somente quando solicitada explicitamente. A listagem principal
+    // precisa retornar todos os clientes do banco legado.
+    if (filters?.limit !== undefined) {
+        sql += " LIMIT ? OFFSET ?";
+        params.push(filters.limit, filters.offset ?? 0);
+    }
     console.log('[findAllClientes] Executando query:', sql.replace(/\s+/g, ' '), 'com parâmetros:', params);
     const [rows] = await pool.query(sql, params);
     console.log(`[findAllClientes] Query retornou ${Array.isArray(rows) ? rows.length : 0} registros.`);

@@ -38,44 +38,76 @@ export class EndUserRepository implements IEndUserRepository {
   }
 
   async findAll(): Promise<EndUser[]> {
+    const startedAt = Date.now();
     console.info("[EndUserRepository] findAll called");
     try {
+      console.info("[EndUserRepository] findAll querying legacy clientes");
       const items = await findAllClientes();
+      console.info("[EndUserRepository] findAll legacy query completed", {
+        rowsCount: items.length,
+        elapsedMs: Date.now() - startedAt
+      });
+      const mapStartedAt = Date.now();
       const mapped = await Promise.all(items.map((item) => this.mapToContract(item)));
-      console.info("[EndUserRepository] findAll completed", { count: mapped.length });
+      console.info("[EndUserRepository] findAll mapping completed", {
+        count: mapped.length,
+        elapsedMs: Date.now() - mapStartedAt,
+        totalElapsedMs: Date.now() - startedAt
+      });
       return mapped;
     } catch (err) {
+      console.error("[EndUserRepository] findAll failed", {
+        error: err instanceof Error ? { name: err.name, message: err.message } : String(err),
+        elapsedMs: Date.now() - startedAt
+      });
       throw err;
     }
   }
 
   async findById(id: string): Promise<EndUser | null> {
+    const startedAt = Date.now();
     console.info("[EndUserRepository] findById called", { id });
     const seq = Number(id);
     if (isNaN(seq)) {
       return null;
     }
     try {
+      console.info("[EndUserRepository] findById querying legacy cliente", { id, seq });
       const item = await findClienteById(seq);
       if (!item) return null;
-      console.info("[EndUserRepository] findById found record", { id });
+      console.info("[EndUserRepository] findById found record", {
+        id,
+        elapsedMs: Date.now() - startedAt
+      });
       return this.mapToContract(item);
     } catch (err) {
+      console.error("[EndUserRepository] findById failed", {
+        id,
+        error: err instanceof Error ? { name: err.name, message: err.message } : String(err),
+        elapsedMs: Date.now() - startedAt
+      });
       throw err;
     }
   }
 
   async findByIds(ids: number[]): Promise<EndUser[]> {
-    console.info("[EndUserRepository] findByIds called", { idsCount: ids.length });
+    const startedAt = Date.now();
+    console.info("[EndUserRepository] findByIds called", { idsCount: ids.length, idsSample: ids.slice(0, 10) });
     if (ids.length === 0) return [];
     const pool = getLegacyPool();
     if (!pool) return [];
     const placeholders = ids.map(() => "?").join(",");
+    console.info("[EndUserRepository] findByIds querying legacy database", {
+      placeholdersCount: ids.length
+    });
     const [rows] = await pool.query(
       `SELECT * FROM qwclient WHERE memberid IN (${placeholders})`,
       ids
     );
-    console.info("[EndUserRepository] findByIds completed", { rowsCount: (rows as QwClient[]).length });
+    console.info("[EndUserRepository] findByIds completed", {
+      rowsCount: (rows as QwClient[]).length,
+      elapsedMs: Date.now() - startedAt
+    });
     return Promise.all((rows as QwClient[]).map((item) => this.mapToContract(item)));
   }
 

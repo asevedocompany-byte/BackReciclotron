@@ -156,6 +156,7 @@ class PrismaCampaignRepository {
             status: r.status,
             subject: r.subject ?? undefined,
             message: r.message,
+            attachments: r.attachments ?? [],
             estimatedCost: typeof r.estimatedCost === "object" && "toNumber" in r.estimatedCost
                 ? r.estimatedCost.toNumber()
                 : Number(r.estimatedCost),
@@ -191,6 +192,7 @@ class PrismaCampaignRepository {
                 status: data.status,
                 subject: data.subject ?? null,
                 message: data.message,
+                attachments: data.attachments ?? [],
                 estimatedCost: data.estimatedCost,
                 providerMessageId: data.providerMessageId ?? null,
                 sentAt: data.sentAt ? new Date(data.sentAt) : null,
@@ -214,6 +216,7 @@ class PrismaCampaignRepository {
                 status: campaign.status,
                 subject: campaign.subject ?? null,
                 message: campaign.message,
+                attachments: campaign.attachments ?? [],
                 estimatedCost: campaign.estimatedCost,
                 providerMessageId: campaign.providerMessageId ?? null,
                 sentAt: campaign.sentAt ? new Date(campaign.sentAt) : null,
@@ -225,6 +228,20 @@ class PrismaCampaignRepository {
     }
 }
 class PrismaCampaignRecipientRepository {
+    mapRow(r) {
+        return {
+            id: r.id,
+            campaignId: r.campaignId,
+            legacyId: r.legacyId,
+            email: r.email,
+            phone: r.phone ?? null,
+            recipientName: r.recipientName ?? null,
+            status: r.status,
+            messageId: r.messageId ?? null,
+            errorReason: r.errorReason ?? null,
+            sentAt: r.sentAt.toISOString()
+        };
+    }
     async createMany(recipients) {
         console.info("[PrismaCampaignRecipientRepository] createMany called", { count: recipients.length });
         if (recipients.length === 0)
@@ -234,6 +251,8 @@ class PrismaCampaignRecipientRepository {
                 campaignId: r.campaignId,
                 legacyId: r.legacyId,
                 email: r.email,
+                phone: r.phone ?? null,
+                recipientName: r.recipientName ?? null,
                 status: r.status,
                 messageId: r.messageId ?? null,
                 errorReason: r.errorReason ?? null,
@@ -242,6 +261,55 @@ class PrismaCampaignRecipientRepository {
         });
         console.info("[PrismaCampaignRecipientRepository] createMany completed");
     }
+    async upsertMany(recipients) {
+        console.info("[PrismaCampaignRecipientRepository] upsertMany called", { count: recipients.length });
+        for (const recipient of recipients) {
+            await this.upsert(recipient);
+        }
+        console.info("[PrismaCampaignRecipientRepository] upsertMany completed");
+    }
+    async upsert(recipient) {
+        console.info("[PrismaCampaignRecipientRepository] upsert called", {
+            campaignId: recipient.campaignId,
+            legacyId: recipient.legacyId,
+            status: recipient.status
+        });
+        const existing = await prisma.campaignRecipient.findFirst({
+            where: {
+                campaignId: recipient.campaignId,
+                legacyId: recipient.legacyId
+            }
+        });
+        if (existing) {
+            const updated = await prisma.campaignRecipient.update({
+                where: { id: existing.id },
+                data: {
+                    email: recipient.email,
+                    phone: recipient.phone ?? null,
+                    recipientName: recipient.recipientName ?? null,
+                    status: recipient.status,
+                    messageId: recipient.messageId ?? null,
+                    errorReason: recipient.errorReason ?? null,
+                    sentAt: new Date(recipient.sentAt)
+                }
+            });
+            return this.mapRow(updated);
+        }
+        const created = await prisma.campaignRecipient.create({
+            data: {
+                campaignId: recipient.campaignId,
+                legacyId: recipient.legacyId,
+                email: recipient.email,
+                phone: recipient.phone ?? null,
+                recipientName: recipient.recipientName ?? null,
+                status: recipient.status,
+                messageId: recipient.messageId ?? null,
+                errorReason: recipient.errorReason ?? null,
+                sentAt: new Date(recipient.sentAt)
+            }
+        });
+        return this.mapRow(created);
+    }
     async findByCampaign(campaignId) {
         console.info("[PrismaCampaignRecipientRepository] findByCampaign called", { campaignId });
         const rows = await prisma.campaignRecipient.findMany({
@@ -249,16 +317,31 @@ class PrismaCampaignRecipientRepository {
             orderBy: { sentAt: "desc" }
         });
         console.info("[PrismaCampaignRecipientRepository] findByCampaign completed", { count: rows.length });
-        return rows.map((r) => ({
-            id: r.id,
-            campaignId: r.campaignId,
-            legacyId: r.legacyId,
-            email: r.email,
-            status: r.status,
-            messageId: r.messageId ?? null,
-            errorReason: r.errorReason ?? null,
-            sentAt: r.sentAt.toISOString()
-        }));
+        return rows.map((r) => this.mapRow(r));
+    }
+    async findByIds(ids) {
+        console.info("[PrismaCampaignRecipientRepository] findByIds called", { idsCount: ids.length });
+        if (ids.length === 0)
+            return [];
+        const rows = await prisma.campaignRecipient.findMany({
+            where: { id: { in: ids } }
+        });
+        console.info("[PrismaCampaignRecipientRepository] findByIds completed", { count: rows.length });
+        return rows.map((r) => this.mapRow(r));
+    }
+    async findByCampaignAndStatus(campaignId, status) {
+        console.info("[PrismaCampaignRecipientRepository] findByCampaignAndStatus called", { campaignId, status });
+        const rows = await prisma.campaignRecipient.findMany({
+            where: { campaignId, status },
+            orderBy: { sentAt: "desc" }
+        });
+        console.info("[PrismaCampaignRecipientRepository] findByCampaignAndStatus completed", { count: rows.length });
+        return rows.map((r) => this.mapRow(r));
+    }
+    async deleteByCampaign(campaignId) {
+        console.info("[PrismaCampaignRecipientRepository] deleteByCampaign called", { campaignId });
+        await prisma.campaignRecipient.deleteMany({ where: { campaignId } });
+        console.info("[PrismaCampaignRecipientRepository] deleteByCampaign completed", { campaignId });
     }
 }
 export class RepositoryRegistry {

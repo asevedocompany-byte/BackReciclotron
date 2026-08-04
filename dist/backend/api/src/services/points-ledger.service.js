@@ -1,4 +1,5 @@
 import { AppError } from "../shared/errors/app-error.js";
+import { EndUserService } from "./end-user.service.js";
 import { PointsLedgerRepository } from "../repositories/points-ledger.repository.js";
 export class PointsLedgerService {
     app;
@@ -7,9 +8,12 @@ export class PointsLedgerService {
         this.app = app;
         this.repository = new PointsLedgerRepository();
     }
-    list() {
+    list(filters = {}) {
         console.log('[PointsLedgerService] Encaminhando chamada de listagem de movimentações para o repositório');
-        return this.repository.findAll();
+        return this.repository.findAll(filters);
+    }
+    listLatestByUser() {
+        return this.repository.findLatestByUser();
     }
     async create(input) {
         const user = await this.app.container.repositories.endUsers.findById(input.userId);
@@ -19,6 +23,8 @@ export class PointsLedgerService {
         if (nextBalance < 0)
             throw new AppError(400, "Saldo insuficiente para débito.");
         await this.app.container.repositories.endUsers.update({ ...user, pointsBalance: nextBalance });
+        PointsLedgerRepository.invalidateBalanceCache(Number(input.userId));
+        EndUserService.invalidateListCache();
         return this.app.container.repositories.pointsLedger.create(input);
     }
 }

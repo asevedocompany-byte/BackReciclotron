@@ -3,8 +3,13 @@ export declare class EndUserService {
     private app;
     private repository;
     private pointsLedgerRepository;
+    private static listCache;
+    private static readonly listCacheTtlMs;
     constructor(app: FastifyInstance);
+    static invalidateListCache(): void;
+    private loadList;
     list(): Promise<{
+        pointsBalance: number;
         status: "active" | "inactive";
         email: string;
         createdAt: string;
@@ -12,7 +17,6 @@ export declare class EndUserService {
         id: string;
         name: string;
         city: string;
-        pointsBalance: number;
         phone: string | null;
     }[]>;
     findById(id: string): Promise<{

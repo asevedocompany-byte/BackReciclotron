@@ -1,14 +1,4 @@
-import type { EmailProvider, SmsProvider } from "@reciclotron/domain";
-export declare class MockEmailProvider implements EmailProvider {
-    sendCampaign(input: {
-        subject?: string;
-        message: string;
-        recipients: string[];
-    }): Promise<{
-        providerMessageId: string;
-        accepted: number;
-    }>;
-}
+import type { SmsProvider } from "@reciclotron/domain";
 export declare class MockSmsProvider implements SmsProvider {
     estimateCost(input: {
         recipients: string[];

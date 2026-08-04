@@ -10,8 +10,6 @@ export async function findAllPontosColeta(filters?: {
   const pool = getLegacyPool();
   if (!pool) return [];
 
-  const limit = filters?.limit ?? 50;
-  const offset = filters?.offset ?? 0;
   const params: unknown[] = [];
 
   let sql = "SELECT * FROM store WHERE 1=1";
@@ -27,8 +25,12 @@ export async function findAllPontosColeta(filters?: {
     params.push(filters.ativa ? 1 : 0);
   }
 
-  sql += " ORDER BY sname ASC LIMIT ? OFFSET ?";
-  params.push(limit, offset);
+  sql += " ORDER BY sname ASC";
+
+  if (filters?.limit !== undefined) {
+    sql += " LIMIT ? OFFSET ?";
+    params.push(filters.limit, filters.offset ?? 0);
+  }
 
   const [rows] = await pool.query(sql, params);
   return rows as Store[];

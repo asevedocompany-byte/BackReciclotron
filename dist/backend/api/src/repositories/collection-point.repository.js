@@ -60,8 +60,7 @@ export class CollectionPointRepository {
         try {
             const items = await findAllPontosColeta({
                 search: filters?.search,
-                ativa: filters?.status,
-                limit: 100
+                ativa: filters?.status
             });
             console.log(`[CollectionPointRepository] MySQL (tabela store) retornou ${items.length} registros.`);
             return items.map((item) => this.mapToContract(item));
