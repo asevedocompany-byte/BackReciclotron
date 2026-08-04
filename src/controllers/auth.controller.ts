@@ -1,10 +1,14 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { loginSchema } from "@reciclotron/contracts";
-import { AuthService } from "../services/auth.service.js";
+
 export class AuthController {
-  async login(request: FastifyRequest, reply: FastifyReply) {
-    const input = loginSchema.parse(request.body);
-    const service = new AuthService(request.server);
-    return reply.send(await service.login(input.email, input.password));
+  async me(request: FastifyRequest, reply: FastifyReply) {
+    await request.server.container.repositories.adminUsers.updateLastLogin(request.user.sub, new Date().toISOString());
+    console.info("[Auth] sessão administrativa confirmada", {
+      requestId: request.id,
+      userId: request.user.sub,
+      email: request.user.email,
+      role: request.user.role
+    });
+    return reply.send({ user: request.user });
   }
 }

@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Build/runtime outputs
+dist/
+.turbo/
+coverage/
+
+# Local environment and logs
+.env
+.env.*
+!.env.example
+logs/
+*.log
+
+# One-time privileged bootstrap script
+scripts/bootstrap-admin.ts
+scripts/test-sms-sns.ts

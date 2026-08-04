@@ -11,12 +11,12 @@
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/server.js",
+    "bootstrap-admin": "tsx scripts/bootstrap-admin.ts",
     "test:sms": "tsx scripts/test-sms-sns.ts"
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.1075.0",
     "@fastify/cors": "^11.1.0",
-    "@fastify/jwt": "^10.0.0",
     "@fastify/sensible": "^6.0.3",
     "@prisma/client": "^6.7.0",
     "@reciclotron/config": "workspace:*",
@@ -24,6 +24,7 @@
     "@reciclotron/db": "workspace:*",
     "@reciclotron/domain": "workspace:*",
     "@reciclotron/integrations": "workspace:*",
+    "@supabase/supabase-js": "^2.99.0",
     "fastify": "^5.2.1",
     "fastify-plugin": "^5.0.1",
     "mysql2": "^3.22.5",

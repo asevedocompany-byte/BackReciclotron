@@ -25,10 +25,10 @@ export async function registerRoutes(app: FastifyInstance) {
   const sms = new SmsController();
 
   app.get('/health', async () => ({ ok: true }));
-  app.post('/auth/login', auth.login.bind(auth));
 
   app.register(async (privateApp) => {
     privateApp.addHook('onRequest', privateApp.authenticate);
+    privateApp.get('/auth/me', auth.me.bind(auth));
     privateApp.get('/admin-users', admins.list.bind(admins));
     privateApp.get('/end-users', users.list.bind(users));
     privateApp.get('/end-users/:id', users.getById.bind(users));

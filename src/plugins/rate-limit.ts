@@ -39,16 +39,12 @@ export default fp(async (app) => {
       url: request.raw.url ?? request.url
     });
 
-    if (
-      routeKey.includes("GET:/health")
-      || routeKey.includes("POST:/auth/login") === false && isSseRoute(routeKey)
-    ) {
+    if (routeKey.includes("GET:/health") || isSseRoute(routeKey)) {
       return;
     }
 
-    const isLoginRoute = routeKey.includes("POST:/auth/login");
-    const limit = isLoginRoute ? config.RATE_LIMIT_LOGIN_MAX : config.RATE_LIMIT_MAX;
-    const windowMs = isLoginRoute ? config.RATE_LIMIT_LOGIN_TIME_WINDOW_MS : config.RATE_LIMIT_TIME_WINDOW_MS;
+    const limit = config.RATE_LIMIT_MAX;
+    const windowMs = config.RATE_LIMIT_TIME_WINDOW_MS;
     const key = `${request.ip}:${routeKey}`;
     const now = Date.now();
     const current = store.get(key);
