@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "sourceMap": true,
+    "baseUrl": ".",
+    "types": ["node"],
+    "paths": {
+      "@reciclotron/contracts": ["./packages/contracts/src/index.ts", "../contracts/src/index.ts"],
+      "@reciclotron/domain": ["./packages/domain/src/index.ts", "../domain/src/index.ts"],
+      "@reciclotron/db": ["./packages/db/src/index.ts", "../db/src/index.ts"],
+      "@reciclotron/integrations": ["./packages/integrations/src/index.ts", "../integrations/src/index.ts"],
+      "@reciclotron/config": ["./packages/config/src/index.ts", "../config/src/index.ts"]
+    }
+  }
+}

@@ -1,0 +1,2 @@
+ALTER TABLE "campaigns"
+ADD COLUMN "attachments" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];

@@ -1,0 +1,17 @@
+{
+  "name": "@reciclotron/integrations",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test:ses": "node scripts/test-ses-email.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-ses": "^3.1075.0",
+    "@reciclotron/contracts": "file:../contracts"
+  }
+}
