@@ -35,7 +35,7 @@ export class EmailDispatchService {
   constructor(private readonly app: FastifyInstance) {}
 
   async send(campaign: Campaign, recipients: RecipientInput[], signal?: AbortSignal): Promise<EmailDispatchResult> {
-    console.info("[EmailDispatchService] send called", {
+    console.info("[SES][EmailDispatchService] send called", {
       campaignId: campaign.id,
       recipientsCount: recipients.length
     });
@@ -62,14 +62,14 @@ export class EmailDispatchService {
 
         accepted += 1;
         providerMessageId ||= response.messageId;
-        console.info("[EmailDispatchService] SES accepted", {
+        console.info("[SES][EmailDispatchService] SES accepted", {
           campaignId: campaign.id,
           recipient,
           messageId: response.messageId
         });
       } catch (error) {
         rejected += 1;
-        console.error("[EmailDispatchService] SES rejected", {
+        console.error("[SES][EmailDispatchService] SES rejected", {
           campaignId: campaign.id,
           recipient,
           error: error instanceof Error ? { name: error.name, message: error.message } : String(error)
@@ -86,7 +86,7 @@ export class EmailDispatchService {
       });
     }
 
-    console.info("[EmailDispatchService] send completed", {
+    console.info("[SES][EmailDispatchService] send completed", {
       campaignId: campaign.id,
       providerMessageId,
       accepted,
@@ -111,7 +111,7 @@ export class EmailDispatchService {
 
     for (let attempt = 1; attempt <= this.maxAttempts; attempt += 1) {
       throwIfAborted(input.signal);
-      console.info("[EmailDispatchService] sending via SES", {
+    console.info("[SES][EmailDispatchService] sending via SES", {
         campaignId: input.campaignId,
         recipient: input.recipient,
         subject: input.subject ?? null,
@@ -133,7 +133,7 @@ export class EmailDispatchService {
       } catch (error) {
         lastError = error;
         const errorSummary = error instanceof Error ? { name: error.name, message: error.message } : String(error);
-        console.error("[EmailDispatchService] SES attempt failed", {
+        console.error("[SES][EmailDispatchService] SES attempt failed", {
           campaignId: input.campaignId,
           recipient: input.recipient,
           attempt,
@@ -143,7 +143,7 @@ export class EmailDispatchService {
 
         if (attempt < this.maxAttempts) {
           const delayMs = this.baseRetryDelayMs * (2 ** (attempt - 1));
-          console.info("[EmailDispatchService] retrying SES send", {
+          console.info("[SES][EmailDispatchService] retrying SES send", {
             campaignId: input.campaignId,
             recipient: input.recipient,
             nextAttempt: attempt + 1,

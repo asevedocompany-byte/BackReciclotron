@@ -1,5 +1,32 @@
 import { getLegacyPool } from "../connection.js";
 import type { CorporaWithCategory, CategParceiro } from "../schema.js";
+import { randomBytes } from "node:crypto";
+
+export type PartnerStoreWriteData = {
+  name: string;
+  city: string;
+  description?: string;
+  cnpj?: string | null;
+  email?: string | null;
+  address?: string | null;
+  address2?: string | null;
+  bairro?: string | null;
+  zip?: string | null;
+  state?: string | null;
+  phone1?: string | null;
+  phone?: string | null;
+  phone31?: string | null;
+  phone3?: string | null;
+  respons?: string | null;
+  pinLoja?: string | null;
+  cStoreId?: number | null;
+  categoria?: number | null;
+  active?: boolean;
+};
+
+function createLegacyToken(prefix: string) {
+  return `${prefix}_${randomBytes(18).toString("hex")}`;
+}
 
 export async function findAllLojasParceiras(filters?: {
   search?: string;
@@ -7,7 +34,6 @@ export async function findAllLojasParceiras(filters?: {
   limit?: number;
   offset?: number;
 }): Promise<CorporaWithCategory[]> {
-  console.log('[findAllLojasParceiras] Buscando lojas parceiras com filtros:', filters);
   const pool = getLegacyPool();
   if (!pool) return [];
 
@@ -38,12 +64,7 @@ export async function findAllLojasParceiras(filters?: {
     params.push(filters.limit, filters.offset ?? 0);
   }
 
-  console.log('[findAllLojasParceiras] Executando query:', sql.replace(/\s+/g, ' '), 'com parâmetros:', params);
   const [rows] = await pool.query(sql, params);
-  console.log(`[findAllLojasParceiras] Query retornou ${Array.isArray(rows) ? rows.length : 0} registros.`);
-  if (Array.isArray(rows)) {
-    console.log('[findAllLojasParceiras] Primeiros 3 registros brutos do banco:\n', JSON.stringify(rows.slice(0, 3), null, 2));
-  }
   return rows as CorporaWithCategory[];
 }
 
@@ -64,6 +85,64 @@ export async function findLojaParceiraById(seq: number): Promise<CorporaWithCate
   const list = rows as CorporaWithCategory[];
   console.log(`[findLojaParceiraById] Encontrado? ${list.length > 0}`);
   return list[0] ?? null;
+}
+
+export async function createLojaParceira(data: PartnerStoreWriteData): Promise<number> {
+  const pool = getLegacyPool();
+  if (!pool) throw new Error("Pool do banco legado indisponível.");
+
+  const pinLoja = data.pinLoja?.trim() || createLegacyToken("pin");
+  const pinLojaToken = createLegacyToken("pin_token");
+  const partnerToken = createLegacyToken("partner");
+  const email = data.email?.trim() || "";
+  const sql = `
+    INSERT INTO corpora
+      (c_storeid, categoria, pin_loja, empresa, ramo, razaosocial, cnpj, aemail, cemail,
+       address, address2, bairro, city, state, zip, country, phone1, phone, phone31,
+       phone3, respons, obs, status, destaque, taxa_conversao, pin_loja_token, token_partner)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+  const params = [
+    data.cStoreId ?? 1,
+    data.categoria ?? 7,
+    pinLoja,
+    data.name,
+    "Loja Parceira",
+    data.name,
+    data.cnpj?.trim() || "",
+    email,
+    email,
+    data.address?.trim() || "",
+    data.address2?.trim() || "",
+    data.bairro?.trim() || "",
+    data.city,
+    data.state?.trim() || "",
+    data.zip?.trim() || "",
+    "Brasil",
+    data.phone1?.trim() || "",
+    data.phone?.trim() || "",
+    data.phone31?.trim() || "",
+    data.phone3?.trim() || "",
+    data.respons?.trim() || "",
+    data.description?.trim() || "",
+    data.active === false ? 0 : 1,
+    0,
+    1,
+    pinLojaToken,
+    partnerToken
+  ];
+
+  console.info("[createLojaParceira] Executando INSERT na tabela corpora", {
+    name: data.name,
+    city: data.city,
+    categoria: data.categoria ?? 7,
+    active: data.active !== false
+  });
+  const [result] = await pool.query(sql, params);
+  const seq = Number((result as { insertId?: number }).insertId);
+  console.info("[createLojaParceira] INSERT concluído", { seq });
+  if (!seq) throw new Error("O banco legado não retornou o ID da loja criada.");
+  return seq;
 }
 
 export async function countLojasParceiras(filters?: { ativa?: boolean }): Promise<number> {
@@ -103,16 +182,29 @@ export async function updateLojaParceira(
     cnpj?: string | null;
     aemail?: string | null;
     address?: string | null;
+    address2?: string | null;
+    bairro?: string | null;
+    zip?: string | null;
     state?: string | null;
+    phone1?: string | null;
+    phone?: string | null;
+    phone31?: string | null;
+    phone3?: string | null;
+    respons?: string | null;
+    obs?: string | null;
     pin_loja?: string | null;
     categoria?: number | null;
     c_storeid?: number | null;
     status?: number;
   }
 ): Promise<boolean> {
-  console.log(`[updateLojaParceira] Atualizando loja seq: ${seq} com dados:`, data);
+  const startedAt = Date.now();
+  console.log(`[updateLojaParceira] Iniciando UPDATE da loja seq=${seq}`, { data });
   const pool = getLegacyPool();
-  if (!pool) return false;
+  if (!pool) {
+    console.error(`[updateLojaParceira] Pool legado indisponível para seq=${seq}`);
+    return false;
+  }
 
   const sets: string[] = [];
   const params: unknown[] = [];
@@ -122,20 +214,47 @@ export async function updateLojaParceira(
   if (data.cnpj !== undefined) { sets.push("cnpj = ?"); params.push(data.cnpj); }
   if (data.aemail !== undefined) { sets.push("aemail = ?"); params.push(data.aemail); }
   if (data.address !== undefined) { sets.push("address = ?"); params.push(data.address); }
+  if (data.address2 !== undefined) { sets.push("address2 = ?"); params.push(data.address2); }
+  if (data.bairro !== undefined) { sets.push("bairro = ?"); params.push(data.bairro); }
+  if (data.zip !== undefined) { sets.push("zip = ?"); params.push(data.zip); }
   if (data.state !== undefined) { sets.push("state = ?"); params.push(data.state); }
+  if (data.phone1 !== undefined) { sets.push("phone1 = ?"); params.push(data.phone1); }
+  if (data.phone !== undefined) { sets.push("phone = ?"); params.push(data.phone); }
+  if (data.phone31 !== undefined) { sets.push("phone31 = ?"); params.push(data.phone31); }
+  if (data.phone3 !== undefined) { sets.push("phone3 = ?"); params.push(data.phone3); }
+  if (data.respons !== undefined) { sets.push("respons = ?"); params.push(data.respons); }
+  if (data.obs !== undefined) { sets.push("obs = ?"); params.push(data.obs); }
   if (data.pin_loja !== undefined) { sets.push("pin_loja = ?"); params.push(data.pin_loja); }
   if (data.categoria !== undefined) { sets.push("categoria = ?"); params.push(data.categoria); }
   if (data.c_storeid !== undefined) { sets.push("c_storeid = ?"); params.push(data.c_storeid); }
   if (data.status !== undefined) { sets.push("status = ?"); params.push(data.status); }
 
-  if (sets.length === 0) return false;
+  if (sets.length === 0) {
+    console.warn(`[updateLojaParceira] Nenhum campo alterável recebido para seq=${seq}`);
+    return false;
+  }
 
   const sql = `UPDATE corpora SET ${sets.join(", ")} WHERE seq = ?`;
   params.push(seq);
 
   console.log('[updateLojaParceira] Executando query:', sql, 'com parâmetros:', params);
-  const [result] = await pool.query(sql, params);
-  const affectedRows = (result as { affectedRows?: number }).affectedRows ?? 0;
-  console.log(`[updateLojaParceira] Linhas afetadas: ${affectedRows}`);
-  return affectedRows > 0;
+  try {
+    const [result] = await pool.query(sql, params);
+    const affectedRows = (result as { affectedRows?: number }).affectedRows ?? 0;
+    console.log(`[updateLojaParceira] UPDATE concluído para seq=${seq}`, {
+      affectedRows,
+      elapsedMs: Date.now() - startedAt
+    });
+    return affectedRows > 0;
+  } catch (error) {
+    console.error(`[updateLojaParceira] UPDATE falhou para seq=${seq}`, {
+      sql,
+      params,
+      elapsedMs: Date.now() - startedAt,
+      error: error instanceof Error
+        ? { name: error.name, message: error.message, stack: error.stack }
+        : String(error)
+    });
+    throw error;
+  }
 }

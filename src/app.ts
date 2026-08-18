@@ -46,7 +46,9 @@ export async function buildApp() {
       : corsOrigins.length > 1
         ? corsOrigins
         : corsOrigins[0] ?? true,
-    credentials: true
+    credentials: true,
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
   });
   await app.register(sensible);
   await app.register(rateLimitPlugin);

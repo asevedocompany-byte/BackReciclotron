@@ -10,6 +10,12 @@ type SendSesEmailInput = {
   signal?: AbortSignal;
 };
 
+function formatFromHeader(name: string, email: string) {
+  // O nome explícito impede que clientes exibam somente a parte local do e-mail ("contato").
+  const safeName = name.replace(/[\r\n]/g, "").replace(/"/g, "'").trim();
+  return `${safeName} <${email}>`;
+}
+
 type SendSesEmailResult = {
   messageId: string;
 };
@@ -153,11 +159,12 @@ export class AmazonSesEmailAdapter {
   async sendEmail(input: SendSesEmailInput): Promise<SendSesEmailResult> {
     if (!this.config.SES_FROM_EMAIL) throw new Error("SES_FROM_EMAIL nao configurado.");
 
-    console.info("[AmazonSesEmailAdapter] sendEmail called", {
+    console.info("[SES][AmazonSesEmailAdapter] sendEmail called", {
       recipient: input.recipient,
       campaignId: input.campaignId ?? null,
       region: this.config.AWS_REGION,
       fromEmail: this.config.SES_FROM_EMAIL,
+      fromName: this.config.SES_FROM_NAME,
       replyToEmail: this.config.SES_REPLY_TO_EMAIL ?? null,
       configurationSet: this.config.SES_CONFIGURATION_SET ?? null,
       subject: input.subject?.trim() || "Reciclotron",
@@ -166,7 +173,7 @@ export class AmazonSesEmailAdapter {
     });
 
     const rawMime = buildMimeMessage({
-      from: this.config.SES_FROM_EMAIL,
+      from: formatFromHeader(this.config.SES_FROM_NAME, this.config.SES_FROM_EMAIL),
       replyTo: this.config.SES_REPLY_TO_EMAIL ?? null,
       to: input.recipient,
       subject: input.subject?.trim() || "Reciclotron",
@@ -190,7 +197,7 @@ export class AmazonSesEmailAdapter {
         : undefined
     });
 
-    console.info("[AmazonSesEmailAdapter] SES raw command prepared", {
+    console.info("[SES][AmazonSesEmailAdapter] SES raw command prepared", {
       recipient: input.recipient,
       hasConfigurationSet: Boolean(this.config.SES_CONFIGURATION_SET),
       hasReplyTo: Boolean(this.config.SES_REPLY_TO_EMAIL),
@@ -200,7 +207,7 @@ export class AmazonSesEmailAdapter {
 
     const response = await this.client.send(command, input.signal ? { abortSignal: input.signal } : undefined);
 
-    console.info("[AmazonSesEmailAdapter] SES response received", {
+    console.info("[SES][AmazonSesEmailAdapter] SES response received", {
       recipient: input.recipient,
       messageId: response.MessageId ?? null,
       requestId: response.$metadata?.requestId ?? null,
@@ -223,7 +230,7 @@ export class AmazonSesEmailAdapter {
         isMock: false
       };
     } catch (error) {
-      console.error("[AmazonSesEmailAdapter] Failed to get real SES send quota:", error);
+      console.error("[SES][AmazonSesEmailAdapter] Failed to get real SES send quota:", error);
       throw error instanceof Error
         ? error
         : new Error("Não foi possível consultar a quota real do Amazon SES.");

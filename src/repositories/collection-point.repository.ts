@@ -1,6 +1,6 @@
 import type { CollectionPoint } from "@reciclotron/contracts";
 import type { CollectionPointRepository as ICollectionPointRepository } from "@reciclotron/domain";
-import { findAllPontosColeta, findPontoColetaById } from "../legacy-db/queries/pontos-coleta.js";
+import { createPontoColeta, findAllPontosColeta, findPontoColetaById, updatePontoColeta } from "../legacy-db/queries/pontos-coleta.js";
 import type { Store } from "../legacy-db/schema.js";
 
 function safeIsoDate(val: unknown): string {
@@ -46,20 +46,18 @@ export class CollectionPointRepository implements ICollectionPointRepository {
       city: item.scity || "Sem Informação",
       description,
       address: address || "Sem endereço",
-      active: item.status === 1 || item.status === 0, // Como os totems reais estão com status 0 no banco legado, mapeamos como ativo para visualização no painel
+      active: item.status === 1,
       createdAt: safeIsoDate(item.sdatesince),
       updatedAt: safeIsoDate(item.supdatedate)
     };
   }
 
   async findAll(filters?: { search?: string; status?: boolean }): Promise<CollectionPoint[]> {
-    console.log('[CollectionPointRepository] Executando findAll no MySQL legado na tabela store com filtros:', filters);
     try {
       const items = await findAllPontosColeta({
         search: filters?.search,
         ativa: filters?.status
       });
-      console.log(`[CollectionPointRepository] MySQL (tabela store) retornou ${items.length} registros.`);
       return items.map((item) => this.mapToContract(item));
     } catch (err) {
       console.error('[CollectionPointRepository] Erro ao consultar tabela store no MySQL:', err instanceof Error
@@ -89,13 +87,19 @@ export class CollectionPointRepository implements ICollectionPointRepository {
   }
 
   async create(data: Omit<CollectionPoint, "id" | "createdAt" | "updatedAt">): Promise<CollectionPoint> {
-    console.error('[CollectionPointRepository] Tentativa de criação no banco legado (somente leitura)');
-    throw new Error("Operações de escrita (criação) não são permitidas no banco de dados legado (somente leitura).");
+    console.info('[CollectionPointRepository] Criando ponto no banco legado', { data });
+    const storeid = await createPontoColeta(data);
+    const created = await this.findById(String(storeid));
+    if (!created) throw new Error(`Ponto criado, mas não foi possível reler o registro ${storeid}.`);
+    return created;
   }
 
   async update(id: string, data: Partial<Omit<CollectionPoint, "id" | "createdAt" | "updatedAt">>): Promise<CollectionPoint | null> {
-    console.error(`[CollectionPointRepository] Tentativa de atualização no banco legado (somente leitura) para o ID: ${id}`);
-    throw new Error("Operações de escrita (atualização) não são permitidas no banco de dados legado (somente leitura).");
+    const storeid = Number(id);
+    if (!Number.isInteger(storeid)) return null;
+    console.info('[CollectionPointRepository] Atualizando ponto no banco legado', { storeid, data });
+    await updatePontoColeta(storeid, data);
+    return this.findById(id);
   }
 
   async delete(id: string): Promise<boolean> {

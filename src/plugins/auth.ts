@@ -20,8 +20,6 @@ export default fp(async (app) => {
       hasBearerToken: Boolean(match)
     };
 
-    console.info("[Auth] validação iniciada", logContext);
-
     if (!match) {
       console.warn("[Auth] acesso negado: token ausente", logContext);
       throw new AppError(401, "Sessão administrativa ausente.");
@@ -35,12 +33,6 @@ export default fp(async (app) => {
       });
       throw new AppError(401, "Sessão administrativa inválida ou expirada.");
     }
-
-    console.info("[Auth] usuário identificado no Supabase Auth", {
-      ...logContext,
-      userId: data.user.id,
-      email: data.user.email
-    });
 
     const admin = await app.container.repositories.adminUsers.findById(data.user.id);
     if (!admin) {
@@ -59,12 +51,6 @@ export default fp(async (app) => {
       role: admin.role
     };
 
-    console.info("[Auth] acesso administrativo autorizado", {
-      ...logContext,
-      userId: admin.id,
-      email: admin.email,
-      role: admin.role
-    });
   });
 });
 

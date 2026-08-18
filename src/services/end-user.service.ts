@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import type { EndUser, UpdateEndUserInput } from "@reciclotron/contracts";
 import { EndUserRepository } from "../repositories/end-user.repository.js";
 import { PointsLedgerRepository } from "../repositories/points-ledger.repository.js";
 
@@ -29,31 +30,22 @@ export class EndUserService {
 
   private async loadList() {
     const startedAt = Date.now();
-    console.log('[EndUserService] loadList started');
-
-    console.log('[EndUserService] loadList fetching users from legacy repository');
     const users = await this.repository.findAll();
-    console.log('[EndUserService] loadList users fetched', {
-      count: users.length,
-      elapsedMs: Date.now() - startedAt
-    });
 
-    console.log('[EndUserService] loadList calculating points balance', {
-      count: users.length
-    });
     const memberIds = users
       .map((user) => Number(user.id))
       .filter((memberId) => Number.isFinite(memberId));
     const balances = await this.pointsLedgerRepository.getUsersBalances(memberIds);
+    const latestMovements = await this.pointsLedgerRepository.findLatestByUser();
+    const lastMovementByUser = new Map(
+      latestMovements.map((movement) => [String(movement.userId), movement.createdAt])
+    );
     const enrichedUsers = users.map((user) => ({
       ...user,
-      pointsBalance: balances.get(Number(user.id)) ?? 0
+      pointsBalance: balances.get(Number(user.id)) ?? 0,
+      lastMovementAt: lastMovementByUser.get(String(user.id)) ?? null
     }));
 
-    console.log('[EndUserService] loadList completed', {
-      count: enrichedUsers.length,
-      elapsedMs: Date.now() - startedAt
-    });
     return enrichedUsers;
   }
 
@@ -62,14 +54,10 @@ export class EndUserService {
     const now = Date.now();
 
     if (cache.value && cache.expiresAt > now) {
-      console.log('[EndUserService] list cache hit', {
-        ttlRemainingMs: cache.expiresAt - now
-      });
       return cache.value;
     }
 
     if (cache.pending) {
-      console.log('[EndUserService] list cache pending, reusing in-flight promise');
       return cache.pending;
     }
 
@@ -77,10 +65,6 @@ export class EndUserService {
       cache.value = users;
       cache.expiresAt = Date.now() + EndUserService.listCacheTtlMs;
       cache.pending = null;
-      console.log('[EndUserService] list cache refreshed', {
-        count: users.length,
-        ttlMs: EndUserService.listCacheTtlMs
-      });
       return users;
     }).catch((error) => {
       cache.pending = null;
@@ -95,7 +79,6 @@ export class EndUserService {
   }
 
   async findById(id: string) {
-    console.log('[EndUserService] Buscando usuário final por ID:', { id });
     const user = await this.repository.findById(id);
     if (!user) return null;
 
@@ -105,5 +88,20 @@ export class EndUserService {
       return { ...user, pointsBalance };
     }
     return user;
+  }
+
+  async update(id: string, data: UpdateEndUserInput) {
+    const current = await this.repository.findById(id);
+    if (!current) return null;
+    const updated = await this.repository.update({ ...current, ...data, id } as EndUser & UpdateEndUserInput);
+    EndUserService.invalidateListCache();
+    const memberId = Number(updated.id);
+    if (Number.isInteger(memberId)) {
+      return {
+        ...updated,
+        pointsBalance: await this.pointsLedgerRepository.getUserBalance(memberId)
+      };
+    }
+    return updated;
   }
 }

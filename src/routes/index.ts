@@ -32,6 +32,7 @@ export async function registerRoutes(app: FastifyInstance) {
     privateApp.get('/admin-users', admins.list.bind(admins));
     privateApp.get('/end-users', users.list.bind(users));
     privateApp.get('/end-users/:id', users.getById.bind(users));
+    privateApp.put('/end-users/:id', users.update.bind(users));
     privateApp.get('/collection-points', collectionPoints.list.bind(collectionPoints));
     privateApp.post('/collection-points', collectionPoints.create.bind(collectionPoints));
     privateApp.get('/collection-points/:id', collectionPoints.getById.bind(collectionPoints));
@@ -50,12 +51,14 @@ export async function registerRoutes(app: FastifyInstance) {
     privateApp.post('/audience-segments', segments.create.bind(segments));
     privateApp.get('/campaigns', campaigns.list.bind(campaigns));
     privateApp.get('/campaigns/quota-billing', campaigns.getQuotaBilling.bind(campaigns));
+    privateApp.get('/campaigns/sms-cost-control', campaigns.getSmsCostControl.bind(campaigns));
     privateApp.post('/campaigns', campaigns.create.bind(campaigns));
     privateApp.post('/campaigns/:id/send', campaigns.send.bind(campaigns));
     privateApp.get('/campaigns/:id/status', campaigns.getStatus.bind(campaigns));
     privateApp.get('/campaigns/:id/status/stream', campaigns.streamStatus.bind(campaigns));
     privateApp.get('/campaigns/:jobId/stream', campaigns.streamJobStatus.bind(campaigns));
     privateApp.get('/campaigns/:id/recipients', campaigns.getRecipients.bind(campaigns));
+    privateApp.delete('/campaigns/:id', campaigns.delete.bind(campaigns));
     privateApp.post('/sms/recipients/resolve', sms.resolveRecipients.bind(sms));
     privateApp.post('/sms/dispatch/preview', sms.previewDispatch.bind(sms));
     privateApp.get('/automation-rules', rules.list.bind(rules));

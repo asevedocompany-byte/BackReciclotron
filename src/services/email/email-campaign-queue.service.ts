@@ -72,7 +72,7 @@ export class CampaignEmailQueueService {
     this.states.clear();
     this.listeners.clear();
     this.active.clear();
-    console.info("[CampaignEmailQueue] disposed");
+    console.info("[SES][CampaignEmailQueue] disposed");
   }
 
   subscribe(campaignId: string, listener: CampaignDispatchListener) {
@@ -100,7 +100,7 @@ export class CampaignEmailQueueService {
   enqueue(job: CampaignDispatchJob) {
     const existing = this.states.get(job.campaignId);
     if (existing && (existing.status === "queued" || existing.status === "running")) {
-      console.info("[CampaignEmailQueue] enqueue skipped (already active)", {
+    console.info("[SES][CampaignEmailQueue] enqueue skipped (already active)", {
         campaignId: job.campaignId,
         status: existing.status
       });
@@ -116,7 +116,7 @@ export class CampaignEmailQueueService {
     this.jobs.set(job.campaignId, job);
     this.states.set(job.campaignId, state);
     this.emit(job.campaignId, state);
-    console.info("[CampaignEmailQueue] job enqueued", {
+    console.info("[SES][CampaignEmailQueue] job enqueued", {
       campaignId: job.campaignId,
       totalRecipients: job.totalRecipients,
       queueSize: this.jobs.size
@@ -146,7 +146,7 @@ export class CampaignEmailQueueService {
       try {
         listener(state);
       } catch (error) {
-        console.error("[CampaignEmailQueue] listener failed", {
+        console.error("[SES][CampaignEmailQueue] listener failed", {
           campaignId,
           error: error instanceof Error ? { name: error.name, message: error.message } : String(error)
         });
@@ -178,7 +178,7 @@ export class CampaignEmailQueueService {
     const abortController = new AbortController();
     const timeoutTimer = setTimeout(() => {
       if (!abortController.signal.aborted) {
-        console.error("[CampaignEmailQueue] job timeout reached", {
+        console.error("[SES][CampaignEmailQueue] job timeout reached", {
           campaignId: job.campaignId,
           runId,
           timeoutMs: this.jobTimeoutMs
@@ -210,7 +210,7 @@ export class CampaignEmailQueueService {
         completedAt: new Date().toISOString(),
         errorReason: null
       });
-      console.info("[CampaignEmailQueue] job completed", {
+      console.info("[SES][CampaignEmailQueue] job completed", {
         campaignId: job.campaignId,
         runId
       });
@@ -237,7 +237,7 @@ export class CampaignEmailQueueService {
         errorReason,
         progress: 100
       });
-      console.error("[CampaignEmailQueue] job failed", {
+      console.error("[SES][CampaignEmailQueue] job failed", {
         campaignId: job.campaignId,
         runId,
         error: error instanceof Error ? { name: error.name, message: error.message } : String(error)
@@ -248,7 +248,7 @@ export class CampaignEmailQueueService {
       const cleanupTimer = setTimeout(() => {
         this.states.delete(job.campaignId);
         this.cleanupTimers.delete(job.campaignId);
-        console.info("[CampaignEmailQueue] terminal state cleaned", {
+        console.info("[SES][CampaignEmailQueue] terminal state cleaned", {
           campaignId: job.campaignId,
           retentionMs: this.terminalStateRetentionMs
         });

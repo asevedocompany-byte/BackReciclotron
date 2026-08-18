@@ -7,6 +7,7 @@ import { AppError } from "../shared/errors/app-error.js";
 import { AudienceSegmentService } from "./audience-segment.service.js";
 import { EmailDispatchService } from "./email/email-dispatch.service.js";
 import { SmsRecipientResolverService } from "./sms/sms-recipient-resolver.service.js";
+import { AwsBillingService } from "./aws-billing.service.js";
 import type { SmsQueueState, SmsRecipient } from "./sms/sms.types.js";
 
 type CampaignDispatchState = {
@@ -22,9 +23,6 @@ type CampaignDispatchState = {
   completedAt: string | null;
   errorReason: string | null;
 };
-
-const SMS_TEST_PHONE_NUMBER = "+5522997892095";
-const SMS_TEST_RECIPIENT_COUNT = 4;
 
 function mapSmsQueueStateToDispatchState(state: SmsQueueState, fallbackQueuedAt: string): CampaignDispatchState {
   return {
@@ -79,21 +77,6 @@ export class CampaignService {
     );
   }
 
-  private buildSmsMockRecipients(message: string): Array<SmsRecipient> {
-    return Array.from({ length: SMS_TEST_RECIPIENT_COUNT }, (_, index) => {
-      const sequence = index + 1;
-      return {
-        legacyId: 990000 + sequence,
-        phoneRaw: SMS_TEST_PHONE_NUMBER,
-        phoneE164: SMS_TEST_PHONE_NUMBER,
-        email: `sms-teste-${sequence}@mock.local`,
-        recipientName: `Teste SMS ${sequence}`,
-        isValid: true,
-        normalizationError: null
-      } as SmsRecipient;
-    });
-  }
-
   private async recoverInterruptedSmsDispatch(campaign: Campaign) {
     if (campaign.channel !== "sms" || campaign.status !== "scheduled") return;
 
@@ -136,6 +119,17 @@ export class CampaignService {
     return this.app.container.repositories.campaigns.findAll();
   }
 
+  async delete(campaignId: string) {
+    console.info("[CampaignService] delete called", { campaignId });
+    const campaign = await this.app.container.repositories.campaigns.findById(campaignId);
+    if (!campaign) {
+      console.info("[CampaignService] campaign already deleted or not found", { campaignId });
+      return { success: true };
+    }
+    await this.app.container.repositories.campaigns.delete(campaignId);
+    return { success: true };
+  }
+
   async create(input: CreateCampaignInput) {
     console.info("[CampaignService] create called", {
       channel: input.channel,
@@ -169,11 +163,20 @@ export class CampaignService {
     });
     if (recipientIds && recipientIds.length > 0) {
       const numericIds = new Set<number>();
+      const storeIds = new Set<number>();
       const historicalRecipientIds: string[] = [];
 
       for (const id of recipientIds) {
         const rawId = String(id).trim();
         if (!rawId) continue;
+
+        if (rawId.startsWith('store-') || rawId.startsWith('partner-')) {
+          const parsedStoreId = Number(rawId.replace(/^(store|partner)-/, ''));
+          if (Number.isInteger(parsedStoreId)) {
+            storeIds.add(parsedStoreId);
+          }
+          continue;
+        }
 
         const parsed = Number(rawId);
         if (Number.isInteger(parsed) && String(parsed) === rawId) {
@@ -196,12 +199,37 @@ export class CampaignService {
         ? await this.app.container.legacyEndUsers.findByIds(resolvedIds)
         : [];
 
-      if (legacyRecipients.length > 0) {
-        console.info("[CampaignService] resolveRecipients explicit ids resolved via legacy db", {
+      const storeRecipients: EndUser[] = [];
+      if (storeIds.size > 0) {
+        try {
+          const allStores = await this.app.container.repositories.partnerStores.findAll();
+          const matchedStores = allStores.filter((store) => storeIds.has(Number(store.id)));
+          for (const store of matchedStores) {
+            storeRecipients.push({
+              id: `store-${store.id}`,
+              email: store.email || "",
+              name: store.name,
+              city: store.city || "Sem Cidade",
+              status: store.active ? "active" : "inactive",
+              pointsBalance: 0,
+              phone: store.phone1 || store.phone || null,
+              lastMovementAt: null,
+              createdAt: "",
+              updatedAt: ""
+            });
+          }
+        } catch (err) {
+          console.error("[CampaignService] Erro ao buscar lojas parceiras para destinatários:", err);
+        }
+      }
+
+      if (legacyRecipients.length > 0 || storeRecipients.length > 0) {
+        console.info("[CampaignService] resolveRecipients explicit ids resolved", {
           campaignId: campaign.id,
-          resolvedCount: legacyRecipients.length
+          legacyCount: legacyRecipients.length,
+          storeCount: storeRecipients.length
         });
-        return legacyRecipients;
+        return [...legacyRecipients, ...storeRecipients];
       }
 
       const historicalRecipients = await this.app.container.repositories.campaignRecipients.findByCampaign(campaign.id);
@@ -223,6 +251,7 @@ export class CampaignService {
           status: "active",
           pointsBalance: 0,
           phone: null,
+          lastMovementAt: null,
           createdAt: recipient.sentAt,
           updatedAt: recipient.sentAt
         }));
@@ -307,8 +336,12 @@ export class CampaignService {
         }))
       });
 
-      const smsRecipients = this.buildSmsMockRecipients(campaign.message);
-      console.info("[CampaignService] send sms mock recipients ready", {
+      if (resolvedRecipients.length === 0) {
+        throw new AppError(400, "Nenhum destinatario valido encontrado para a campanha SMS.");
+      }
+
+      const smsRecipients = resolvedRecipients;
+      console.info("[CampaignService] send sms real recipients ready", {
         campaignId: campaign.id,
         totalRecipients: smsRecipients.length,
         sample: smsRecipients.map((recipient) => ({
@@ -363,7 +396,7 @@ export class CampaignService {
       throw new AppError(400, "Nenhum usuário selecionado possui um email válido.");
     }
 
-    console.info("[CampaignService] send email recipients resolved", {
+    console.info("[SES][CampaignService] send email recipients resolved", {
       campaignId: campaign.id,
       requestedRecipientIds: recipientIds?.length ?? 0,
       resolvedRecipients: resolvedRecipients.length,
@@ -454,7 +487,7 @@ export class CampaignService {
       progress: 40
     });
 
-    console.info("[CampaignService] executeSend using selected email recipients", {
+    console.info("[SES][CampaignService] executeSend using selected email recipients", {
       campaignId: campaign.id,
       totalRecipients: emailRecipients.length,
       sample: emailRecipients.slice(0, 3)
@@ -463,7 +496,7 @@ export class CampaignService {
     this.throwIfAborted(signal);
     const dispatchService = this.emailDispatchService ??= new EmailDispatchService(this.app);
     const dispatchResult = await dispatchService.send(campaign, emailRecipients, signal);
-    console.info("[CampaignService] executeSend email dispatch completed", {
+    console.info("[SES][CampaignService] executeSend email dispatch completed", {
       campaignId: campaign.id,
       providerMessageId: dispatchResult.providerMessageId,
       accepted: dispatchResult.accepted,
@@ -645,23 +678,9 @@ export class CampaignService {
     const campaigns = await this.app.container.repositories.campaigns.findAll();
     const sentCampaigns = campaigns.filter((c) => c.status === "sent");
 
-    const emailRecipientsCount = await prisma.campaignRecipient.count({
-      where: {
-        status: "sent",
-        email: { not: "" }
-      }
-    });
-
-    const smsRecipientsCount = await prisma.campaignRecipient.count({
-      where: {
-        status: "sent",
-        phone: { not: null }
-      }
-    });
-
-    let totalAttachmentBytes = 0;
+    let totalOutboundDataBytes = 0;
     for (const campaign of sentCampaigns) {
-      if (campaign.channel === "email" && campaign.attachments && campaign.attachments.length > 0) {
+      if (campaign.channel === "email") {
         const campaignSentRecipientsCount = await prisma.campaignRecipient.count({
           where: {
             campaignId: campaign.id,
@@ -669,47 +688,98 @@ export class CampaignService {
           }
         });
 
-        for (const att of campaign.attachments) {
+        let attachmentBytes = 0;
+        for (const att of campaign.attachments ?? []) {
           try {
             const parsed = JSON.parse(att);
             if (parsed && typeof parsed.size === "number") {
-              totalAttachmentBytes += parsed.size * campaignSentRecipientsCount;
+              attachmentBytes += parsed.size;
             }
           } catch {}
         }
+
+        // Estima o MIME enviado por destinatário: corpo HTML/texto duplicado,
+        // anexos codificados em Base64 e uma margem para cabeçalhos/boundaries.
+        const messageBytes = Buffer.byteLength(campaign.message ?? "", "utf8");
+        const estimatedMimeBytes = Math.ceil((messageBytes * 2 + attachmentBytes * 4 / 3) * 1.05);
+        totalOutboundDataBytes += estimatedMimeBytes * campaignSentRecipientsCount;
       }
     }
 
-    const totalAttachmentGB = totalAttachmentBytes / (1024 * 1024 * 1024);
-    const customerAttachmentCost = totalAttachmentGB * 1.50; // R$ 1.50 por GB para o cliente
-    const customerEmailBaseCost = quota.sentLast24h * 0.00055;
-    const customerSmsCost = smsRecipientsCount * 0.12;
-    const customerTotalCost = customerEmailBaseCost + customerAttachmentCost + customerSmsCost;
+    const usdToBrlExchangeRate = 5.12;
 
-    const awsEmailOutboundCostUsd = quota.sentLast24h * 0.0001;
-    const awsAttachmentCostUsd = totalAttachmentGB * 0.12; // $0.12 por GB da AWS
-    const totalCostUsd = awsEmailOutboundCostUsd + awsAttachmentCostUsd;
-    const usdToBrlExchangeRate = 5.50;
-    const totalCostBrl = totalCostUsd * usdToBrlExchangeRate;
+    const awsBillingService = new AwsBillingService();
+    const awsSnapshot = await awsBillingService.getSesCostSnapshot({
+      sentEmails: quota.sentLast24h,
+      outboundDataBytes: totalOutboundDataBytes
+    });
+
+    const officialSes = awsSnapshot.official.ses;
+    const customerEmailCost = officialSes.emailCostUsd ?? 0;
+    const customerOutboundDataCost = officialSes.outboundDataCostUsd ?? 0;
+    const customerTotalCost = customerEmailCost + customerOutboundDataCost;
+    const totalOutboundDataGB = (officialSes.outboundDataBytes ?? 0) / (1024 * 1024 * 1024);
+    const realTotalAwsUsd = awsSnapshot.manual.costExplorer.amountUsd ?? awsSnapshot.official.ses.totalEstimatedUsd ?? 0;
+    const totalCostBrl = realTotalAwsUsd * usdToBrlExchangeRate;
 
     return {
       quota,
       cost: {
         customer: {
-          emailCost: customerEmailBaseCost,
-          attachmentCost: customerAttachmentCost,
-          totalAttachmentGB,
-          smsCost: customerSmsCost,
+          emailCost: customerEmailCost,
+          outboundDataCost: customerOutboundDataCost,
+          totalOutboundDataGB,
           totalCost: customerTotalCost
         },
         aws: {
-          emailOutboundCostUsd: awsEmailOutboundCostUsd,
-          attachmentCostUsd: awsAttachmentCostUsd,
-          totalCostUsd,
+          emailOutboundCostUsd: awsSnapshot.official.ses.emailCostUsd ?? 0,
+          outboundDataCostUsd: awsSnapshot.official.ses.outboundDataCostUsd ?? 0,
+          totalCostUsd: realTotalAwsUsd,
           totalCostBrl,
-          exchangeRate: usdToBrlExchangeRate
+          exchangeRate: usdToBrlExchangeRate,
+          official: awsSnapshot.official.ses,
+          billing: awsSnapshot.manual.costExplorer,
+          rawSnapshot: awsSnapshot
         }
       }
+    };
+  }
+
+  async getSmsCostControl() {
+    const config = getConfig();
+    const campaigns = await this.app.container.repositories.campaigns.findAll();
+    const smsCampaigns = campaigns.filter((campaign) => campaign.channel === "sms");
+    const sentMessages = await prisma.campaignRecipient.count({
+      where: { status: "sent", phone: { not: null } }
+    });
+    const spentUsd = Number((sentMessages * config.SMS_COST_PER_MESSAGE_USD).toFixed(2));
+    const reservedUsd = Number(smsCampaigns
+      .filter((campaign) => campaign.status === "scheduled")
+      .reduce((sum, campaign) => sum + Number(campaign.estimatedCost), 0)
+      .toFixed(2));
+
+    const awsRaw = await new AwsBillingService().getSmsCostSnapshot();
+
+    const aws = {
+      ...awsRaw,
+      cost: awsRaw.manual.costExplorer,
+      credits: awsRaw.official.credits,
+      smsAttributes: awsRaw.official.smsAttributes
+    };
+
+    return {
+      costPerMessageUsd: config.SMS_COST_PER_MESSAGE_USD,
+      sentMessages,
+      localSpentUsd: spentUsd,
+      reservedUsd,
+      aws,
+      campaigns: smsCampaigns.map((campaign) => ({
+        id: campaign.id,
+        name: campaign.name,
+        status: campaign.status,
+        createdAt: campaign.createdAt,
+        estimatedCostUsd: Number(campaign.estimatedCost)
+      }))
     };
   }
 }

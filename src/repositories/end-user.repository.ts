@@ -1,6 +1,6 @@
-import type { EndUser } from "@reciclotron/contracts";
+import type { EndUser, UpdateEndUserInput } from "@reciclotron/contracts";
 import type { EndUserRepository as IEndUserRepository } from "@reciclotron/domain";
-import { findAllClientes, findClienteById } from "../legacy-db/queries/clientes.js";
+import { findAllClientes, findClienteById, readLegacyAdminFields, updateCliente } from "../legacy-db/queries/clientes.js";
 import { getLegacyPool } from "../legacy-db/connection.js";
 import type { QwClient } from "../legacy-db/schema.js";
 
@@ -19,9 +19,7 @@ function safeIsoDate(val: unknown): string {
 
 export class EndUserRepository implements IEndUserRepository {
   private async mapToContract(item: QwClient): Promise<EndUser> {
-    if (String(item.memberid) === "3041") {
-      console.log("RAW CLIENT 3041:", JSON.stringify(item, null, 2));
-    }
+    const adminFields = readLegacyAdminFields(item.info);
     return {
       ...item,
       id: String(item.memberid),
@@ -32,6 +30,11 @@ export class EndUserRepository implements IEndUserRepository {
       status: item.cact === 1 ? "active" : "inactive",
       pointsBalance: 0,
       phone: item.phonefull || item.phone1 || null,
+      info: item.info || '',
+      whatsapp: adminFields.whatsapp ?? null,
+      rg: adminFields.rg ?? null,
+      sex: adminFields.sex ?? null,
+      prof: adminFields.prof ?? null,
       createdAt: safeIsoDate(item.datesince),
       updatedAt: safeIsoDate(item.datesince)
     } as any;
@@ -39,21 +42,10 @@ export class EndUserRepository implements IEndUserRepository {
 
   async findAll(): Promise<EndUser[]> {
     const startedAt = Date.now();
-    console.info("[EndUserRepository] findAll called");
     try {
-      console.info("[EndUserRepository] findAll querying legacy clientes");
       const items = await findAllClientes();
-      console.info("[EndUserRepository] findAll legacy query completed", {
-        rowsCount: items.length,
-        elapsedMs: Date.now() - startedAt
-      });
       const mapStartedAt = Date.now();
       const mapped = await Promise.all(items.map((item) => this.mapToContract(item)));
-      console.info("[EndUserRepository] findAll mapping completed", {
-        count: mapped.length,
-        elapsedMs: Date.now() - mapStartedAt,
-        totalElapsedMs: Date.now() - startedAt
-      });
       return mapped;
     } catch (err) {
       console.error("[EndUserRepository] findAll failed", {
@@ -66,19 +58,13 @@ export class EndUserRepository implements IEndUserRepository {
 
   async findById(id: string): Promise<EndUser | null> {
     const startedAt = Date.now();
-    console.info("[EndUserRepository] findById called", { id });
     const seq = Number(id);
     if (isNaN(seq)) {
       return null;
     }
     try {
-      console.info("[EndUserRepository] findById querying legacy cliente", { id, seq });
       const item = await findClienteById(seq);
       if (!item) return null;
-      console.info("[EndUserRepository] findById found record", {
-        id,
-        elapsedMs: Date.now() - startedAt
-      });
       return this.mapToContract(item);
     } catch (err) {
       console.error("[EndUserRepository] findById failed", {
@@ -111,7 +97,14 @@ export class EndUserRepository implements IEndUserRepository {
     return Promise.all((rows as QwClient[]).map((item) => this.mapToContract(item)));
   }
 
-  async update(user: EndUser): Promise<EndUser> {
-    throw new Error("Operações de escrita (atualização) não são permitidas no banco de dados legado (somente leitura).");
+  async update(user: EndUser & UpdateEndUserInput): Promise<EndUser> {
+    const memberid = Number(user.id);
+    if (!Number.isInteger(memberid)) return user;
+
+    await updateCliente(memberid, user);
+    const updated = await this.findById(String(memberid));
+    if (!updated) throw new Error(`Usuário ${memberid} não foi encontrado após a atualização.`);
+    return updated;
   }
+
 }

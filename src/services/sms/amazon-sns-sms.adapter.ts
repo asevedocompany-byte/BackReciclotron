@@ -82,7 +82,7 @@ export class AmazonSnsSmsAdapter {
     const accessKeyId = config.AWS_ACCESS_KEY_ID ?? process.env.AWS_ACCESS_KEY_ID;
     const secretAccessKey = config.AWS_SECRET_ACCESS_KEY ?? process.env.AWS_SECRET_ACCESS_KEY;
     const sessionToken = config.AWS_SESSION_TOKEN ?? process.env.AWS_SESSION_TOKEN;
-    const region = config.AWS_REGION;
+    const region = config.AWS_SMS_REGION;
 
     if (!accessKeyId || !secretAccessKey) {
       throw new SmsDispatchError("Credenciais AWS ausentes para envio de SMS.", {

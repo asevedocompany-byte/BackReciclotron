@@ -19,9 +19,37 @@ export class CampaignController {
   }
 
   async getQuotaBilling(request: FastifyRequest, reply: FastifyReply) {
-    console.info("[CampaignController] getQuotaBilling called");
+    console.info("[SES][CampaignController] getQuotaBilling called");
     const service = this.createService(request);
-    return reply.send(await service.getQuotaAndBilling());
+    const response = await service.getQuotaAndBilling();
+    console.info("[SES][CampaignController][quota-billing] resposta enviada", {
+      quota: response.quota,
+      customerCost: response.cost?.customer,
+      ses: {
+        sentEmails: response.cost?.aws?.official?.sentEmails,
+        delivery: response.cost?.aws?.official?.metrics?.delivery,
+        sendMetric: response.cost?.aws?.official?.metrics?.send,
+        deliveryAttempts: response.cost?.aws?.official?.statistics?.deliveryAttempts,
+        bounces: response.cost?.aws?.official?.statistics?.bounces,
+        complaints: response.cost?.aws?.official?.statistics?.complaints,
+        rejects: response.cost?.aws?.official?.statistics?.rejects,
+        periodStart: response.cost?.aws?.official?.periodStart,
+        periodEnd: response.cost?.aws?.official?.periodEnd,
+      },
+      billing: response.cost?.aws?.billing,
+    });
+    return reply.send(response);
+  }
+
+  async getSmsCostControl(request: FastifyRequest, reply: FastifyReply) {
+    console.info("[CampaignController] getSmsCostControl called", {
+      url: request.url,
+      requestId: request.id,
+    });
+    const service = this.createService(request);
+    const response = await service.getSmsCostControl();
+    console.info("[CampaignController][sms-cost-control] resposta enviada", response);
+    return reply.send(response);
   }
 
   async create(request: FastifyRequest, reply: FastifyReply) {
@@ -29,6 +57,12 @@ export class CampaignController {
     const service = this.createService(request);
     const payload = createCampaignSchema.parse(request.body);
     return reply.code(201).send(await service.create(payload));
+  }
+
+  async delete(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
+    console.info("[CampaignController] delete called", { campaignId: request.params.id });
+    const service = this.createService(request);
+    return reply.send(await service.delete(request.params.id));
   }
 
   async send(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {

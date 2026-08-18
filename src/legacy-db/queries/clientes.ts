@@ -1,6 +1,37 @@
 import { getLegacyPool } from "../connection.js";
 import type { QwClient } from "../schema.js"; 
 
+const ADMIN_FIELDS_MARKER = "\n[reciclotron-admin-fields]";
+
+export type LegacyAdminFields = {
+  whatsapp?: string | null;
+  rg?: string | null;
+  sex?: string | null;
+  prof?: string | null;
+};
+
+export function readLegacyAdminFields(info: unknown): LegacyAdminFields {
+  const text = String(info ?? "");
+  const markerIndex = text.indexOf(ADMIN_FIELDS_MARKER);
+  if (markerIndex === -1) return {};
+
+  try {
+    return JSON.parse(text.slice(markerIndex + ADMIN_FIELDS_MARKER.length)) as LegacyAdminFields;
+  } catch {
+    return {};
+  }
+}
+
+function writeLegacyAdminFields(info: unknown, fields: LegacyAdminFields) {
+  const text = String(info ?? "");
+  const markerIndex = text.indexOf(ADMIN_FIELDS_MARKER);
+  const originalInfo = (markerIndex === -1 ? text : text.slice(0, markerIndex)).trimEnd();
+  const hasFields = Object.values(fields).some((value) => value !== null && value !== undefined && value !== "");
+  return hasFields
+    ? `${originalInfo}${ADMIN_FIELDS_MARKER}${JSON.stringify(fields)}`
+    : originalInfo;
+}
+
 export async function findAllClientes(filters?: {
   search?: string;
   ativo?: boolean;
@@ -34,17 +65,11 @@ export async function findAllClientes(filters?: {
     params.push(filters.limit, filters.offset ?? 0);
   }
 
-  console.log('[findAllClientes] Executando query:', sql.replace(/\s+/g, ' '), 'com parâmetros:', params);
   const [rows] = await pool.query(sql, params);
-  console.log(`[findAllClientes] Query retornou ${Array.isArray(rows) ? rows.length : 0} registros.`);
-  if (Array.isArray(rows)) {
-    console.log('[findAllClientes] Primeiros 3 registros brutos do banco:\n', JSON.stringify(rows.slice(0, 3), null, 2));
-  }
   return rows as QwClient[];
 }
 
 export async function findClienteById(memberid: number): Promise<QwClient | null> {
-  console.log(`[findClienteById] Buscando cliente com ID/memberid: ${memberid}`);
   const pool = getLegacyPool();
   if (!pool) return null;
 
@@ -53,11 +78,60 @@ export async function findClienteById(memberid: number): Promise<QwClient | null
     [memberid]
   );
   const list = rows as QwClient[];
-  console.log(`[findClienteById] Encontrado? ${list.length > 0}`);
-  if (list.length > 0) {
-    console.log('[findClienteById] Registro bruto do banco:\n', JSON.stringify(list[0], null, 2));
-  }
   return list[0] ?? null;
+}
+
+export async function updateCliente(memberid: number, data: {
+  firstname: string;
+  lastname: string;
+  email: string;
+  phonefull?: string | null;
+  cpf?: string | null;
+  address?: string | null;
+  bairro?: string | null;
+  city: string;
+  state?: string | null;
+  zip?: string | null;
+  birthday?: string | null;
+  whatsapp?: string | null;
+  rg?: string | null;
+  sex?: string | null;
+  prof?: string | null;
+  info?: string | null;
+  cact: boolean;
+}): Promise<boolean> {
+  const pool = getLegacyPool();
+  if (!pool) return false;
+
+  const [result] = await pool.query(
+    `UPDATE qwclient
+     SET firstname = ?, lastname = ?, email = ?, phonefull = ?, cpf = ?,
+         address = ?, bairro = ?, city = ?, state = ?, zip = ?, birthday = ?, info = ?, cact = ?
+     WHERE memberid = ?`,
+    [
+      data.firstname,
+      data.lastname,
+      data.email,
+      data.phonefull ?? '',
+      data.cpf ?? '',
+      data.address ?? '',
+      data.bairro ?? '',
+      data.city,
+      data.state ?? '',
+      data.zip ?? '',
+      data.birthday || null,
+      writeLegacyAdminFields(data.info, {
+        whatsapp: data.whatsapp ?? null,
+        rg: data.rg ?? null,
+        sex: data.sex ?? null,
+        prof: data.prof ?? null
+      }),
+      data.cact ? 1 : 0,
+      memberid
+    ]
+  );
+
+  return Number((result as { affectedRows?: number }).affectedRows ?? 0) > 0;
 }
 
 export async function countClientes(filters?: {

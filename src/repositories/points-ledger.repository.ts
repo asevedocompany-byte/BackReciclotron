@@ -18,23 +18,13 @@ export class PointsLedgerRepository {
 
   async getUserBalance(memberId: number): Promise<number> {
     const startedAt = Date.now();
-    console.info("[PointsLedgerRepository] getUserBalance called", { memberId });
-
     const cached = PointsLedgerRepository.balanceCache.get(memberId);
     if (cached && cached.expiresAt > Date.now()) {
-      console.info("[PointsLedgerRepository] getUserBalance cache hit", {
-        memberId,
-        balance: cached.value,
-        ttlRemainingMs: cached.expiresAt - Date.now()
-      });
       return cached.value;
     }
 
     const pending = PointsLedgerRepository.balancePending.get(memberId);
     if (pending) {
-      console.info("[PointsLedgerRepository] getUserBalance cache pending, reusing in-flight promise", {
-        memberId
-      });
       return pending;
     }
 
@@ -48,7 +38,6 @@ export class PointsLedgerRepository {
 
     const queryPromise = (async () => {
       try {
-        console.info("[PointsLedgerRepository] getUserBalance querying legacy database", { memberId });
         const [rows] = await pool.query(
           "SELECT SUM(points) AS balance FROM qwpurchase WHERE memberid = ?",
           [memberId]
@@ -58,11 +47,6 @@ export class PointsLedgerRepository {
         PointsLedgerRepository.balanceCache.set(memberId, {
           value: balance,
           expiresAt: Date.now() + PointsLedgerRepository.balanceCacheTtlMs
-        });
-        console.info("[PointsLedgerRepository] getUserBalance completed", {
-          memberId,
-          balance,
-          elapsedMs: Date.now() - startedAt
         });
         return balance;
       } catch (err) {
@@ -126,18 +110,10 @@ export class PointsLedgerRepository {
       if (!balances.has(memberId)) balances.set(memberId, 0);
     }
 
-    console.info("[PointsLedgerRepository] getUsersBalances completed", {
-      requested: uniqueIds.length,
-      queried: missingIds.length,
-      chunks: Math.ceil(missingIds.length / chunkSize)
-    });
     return balances;
   }
 
   private mapToContract(row: any): any {
-    if (String(row.memberid) === "3041") {
-      console.log("RAW PURCHASE FOR 3041:", JSON.stringify(row, null, 2));
-    }
     let isoDate: string;
     if (row.date instanceof Date) {
       const y = row.date.getUTCFullYear();
@@ -166,6 +142,84 @@ export class PointsLedgerRepository {
       createdAt: isoDate,
       updatedAt: isoDate
     };
+  }
+
+  async findById(id: string): Promise<any | null> {
+    const pool = getLegacyPool();
+    if (!pool) return null;
+
+    try {
+      const [rows] = await pool.query("SELECT * FROM qwpurchase WHERE purchaseid = ?", [Number(id)]);
+      const result = rows as any[];
+      if (result.length === 0) return null;
+      return this.mapToContract(result[0]);
+    } catch {
+      return null;
+    }
+  }
+
+  async createLegacyEntry(data: {
+    userId: string;
+    type: 'credit' | 'debit';
+    points: number;
+    description: string;
+    source: string;
+    createdAt?: string;
+  }): Promise<any> {
+    const pool = getLegacyPool();
+    if (!pool) {
+      console.warn('[PointsLedger][legacy-create] banco legado indisponível');
+      throw new Error('Banco legado indisponível.');
+    }
+
+    const memberId = Number(data.userId);
+    if (!Number.isInteger(memberId)) {
+      console.warn('[PointsLedger][legacy-create] usuário legado inválido', { userIdType: typeof data.userId });
+      throw new Error('Usuário legado inválido.');
+    }
+
+    const date = data.createdAt
+      ? new Date(data.createdAt).toISOString().slice(0, 10)
+      : new Date().toISOString().slice(0, 10);
+    const signedPoints = data.type === 'debit' ? -Math.abs(data.points) : Math.abs(data.points);
+    const operationId = `ADMIN-${memberId}-${Date.now()}`;
+
+    console.info('[PointsLedger][legacy-create] iniciando INSERT', {
+      memberId,
+      type: data.type,
+      points: signedPoints,
+      date,
+      source: data.source
+    });
+
+    const [result] = await pool.query(
+      `INSERT INTO qwpurchase (
+        memberid, qr_reward_id, estabel_parceiro_id, corpora_validante,
+        indicador_id, entidade_id, amount, points, qtty, fpgto, date,
+        qr_date_expire, date_use_cupom, staffid, tp, tp_voucher, hist,
+        recyclablesseq, catprod, qttyprod, pstoreid, reward_id, pnum,
+        ped, status_brinde, autonum
+      ) VALUES (?, 0, 0, 0, '0', 0, 0, ?, '0', 1, ?, ?, ?, 1, ?, 0, ?, 0, 15, '0', 1, 0, ?, ?, 0, ?)`,
+      [
+        memberId,
+        signedPoints,
+        date,
+        date,
+        date,
+        data.type === 'debit' ? 'D' : 'C',
+        data.description,
+        operationId,
+        operationId,
+        operationId
+      ]
+    );
+
+    const purchaseId = Number((result as { insertId?: number }).insertId);
+    console.info('[PointsLedger][legacy-create] INSERT concluído', { memberId, purchaseId });
+    if (!purchaseId) throw new Error('Movimentação criada, mas não foi possível identificar o lançamento.');
+
+    PointsLedgerRepository.invalidateBalanceCache(memberId);
+    return this.findById(String(purchaseId));
   }
 
   async findAll(filters: { userId?: string; limit?: number; offset?: number } = {}) {

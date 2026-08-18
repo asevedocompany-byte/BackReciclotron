@@ -18,4 +18,5 @@ export class PointsLedgerController {
   async create(request: FastifyRequest, reply: FastifyReply) {
     return reply.code(201).send(await new PointsLedgerService(request.server).create(createLedgerEntrySchema.parse(request.body)));
   }
+
 }

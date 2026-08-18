@@ -15,7 +15,12 @@
     "test:sms": "tsx scripts/test-sms-sns.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-billing": "^3.0.0",
+    "@aws-sdk/client-cloudwatch": "^3.1103.0",
+    "@aws-sdk/client-cost-explorer": "^3.0.0",
     "@aws-sdk/client-ses": "^3.1075.0",
+    "@aws-sdk/client-sns": "^3.0.0",
+    "@aws-sdk/client-sts": "^3.0.0",
     "@fastify/cors": "^11.1.0",
     "@fastify/sensible": "^6.0.3",
     "@prisma/client": "^6.7.0",

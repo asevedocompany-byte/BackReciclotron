@@ -20,9 +20,41 @@ export class PartnerStoreController {
   }
 
   async update(request: FastifyRequest, reply: FastifyReply) {
-    const result = await new PartnerStoreService(request.server).update((request.params as { id: string }).id, updatePartnerStoreSchema.parse(request.body));
-    if (!result) return reply.code(404).send({ message: "Partner store not found" });
-    return reply.send(result);
+    const id = (request.params as { id: string }).id;
+    console.info("[PartnerStoreController] update received", {
+      requestId: request.id,
+      id,
+      body: request.body
+    });
+    try {
+      const payload = updatePartnerStoreSchema.parse(request.body);
+      console.info("[PartnerStoreController] update payload validated", {
+        requestId: request.id,
+        id,
+        payload
+      });
+      const result = await new PartnerStoreService(request.server).update(id, payload);
+      if (!result) {
+        console.warn("[PartnerStoreController] update returned no store", { requestId: request.id, id });
+        return reply.code(404).send({ message: "Partner store not found" });
+      }
+      console.info("[PartnerStoreController] update completed", {
+        requestId: request.id,
+        id,
+        name: result.name,
+        city: result.city
+      });
+      return reply.send(result);
+    } catch (error) {
+      console.error("[PartnerStoreController] update failed", {
+        requestId: request.id,
+        id,
+        error: error instanceof Error
+          ? { name: error.name, message: error.message, stack: error.stack }
+          : String(error)
+      });
+      throw error;
+    }
   }
 
   async delete(request: FastifyRequest, reply: FastifyReply) {

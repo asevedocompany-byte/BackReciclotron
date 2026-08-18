@@ -25,7 +25,7 @@ export class PartnerStoreService {
   }
 
   update(id: string, input: UpdatePartnerStoreInput) {
-    console.log('[PartnerStoreService] Tentativa de atualizar loja parceira:', { id });
+    console.log('[PartnerStoreService] Atualização de loja parceira iniciada:', { id, input });
     return this.repository.update(id, input);
   }
 
