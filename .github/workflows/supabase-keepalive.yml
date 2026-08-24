@@ -10,11 +10,36 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Supabase Edge Function
+      - name: Ping Supabase Database / API
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_FUNCTION_URL: ${{ secrets.SUPABASE_FUNCTION_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          DEFAULT_PROJECT_URL: "https://rmbwggnxscuzpwqywtig.supabase.co"
         run: |
-          curl --fail --show-error --silent \
-            -X POST "${{ secrets.SUPABASE_FUNCTION_URL }}" \
-            -H "Content-Type: application/json" \
-            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
-            -d '{"source":"github-actions","ts":"'"$(date -u +"%Y-%m-%dT%H:%M:%SZ")"'"}'
+          # Define URL target (Edge function or REST API endpoint)
+          if [ -n "$SUPABASE_FUNCTION_URL" ]; then
+            TARGET_URL="$SUPABASE_FUNCTION_URL"
+          elif [ -n "$SUPABASE_URL" ]; then
+            TARGET_URL="${SUPABASE_URL%/}/rest/v1/"
+          else
+            TARGET_URL="${DEFAULT_PROJECT_URL}/rest/v1/"
+          fi
+
+          # Define API Key
+          KEY="${SUPABASE_SERVICE_ROLE_KEY:-$SUPABASE_ANON_KEY}"
+
+          echo "Pinging Supabase target: $TARGET_URL"
+
+          if [ -n "$KEY" ]; then
+            curl --fail --show-error --silent \
+              -X GET "$TARGET_URL" \
+              -H "apikey: $KEY" \
+              -H "Authorization: Bearer $KEY" > /dev/null
+          else
+            curl --fail --show-error --silent \
+              -X GET "$TARGET_URL" > /dev/null
+          fi
+
+          echo "Supabase keepalive ping successful!"
