@@ -17,6 +17,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           DEFAULT_PROJECT_URL: "https://rmbwggnxscuzpwqywtig.supabase.co"
+          DEFAULT_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtYndnZ254c2N1enB3cXl3dGlnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTE5MDAyNCwiZXhwIjoyMDkwNzY2MDI0fQ.SKxVO2ieCyHW8vL08vmFg70gOt_iTEkec8o_AAbfi5M"
         run: |
           # Define URL target (Edge function or REST API endpoint)
           if [ -n "$SUPABASE_FUNCTION_URL" ]; then
@@ -27,19 +28,22 @@ jobs:
             TARGET_URL="${DEFAULT_PROJECT_URL}/rest/v1/"
           fi
 
-          # Define API Key
-          KEY="${SUPABASE_SERVICE_ROLE_KEY:-$SUPABASE_ANON_KEY}"
+          # Define API Key (use secret if defined, otherwise fallback to default key)
+          KEY="${SUPABASE_SERVICE_ROLE_KEY:-${SUPABASE_ANON_KEY:-$DEFAULT_KEY}}"
 
           echo "Pinging Supabase target: $TARGET_URL"
 
-          if [ -n "$KEY" ]; then
-            curl --fail --show-error --silent \
-              -X GET "$TARGET_URL" \
-              -H "apikey: $KEY" \
-              -H "Authorization: Bearer $KEY" > /dev/null
-          else
-            curl --fail --show-error --silent \
-              -X GET "$TARGET_URL" > /dev/null
-          fi
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "apikey: $KEY" \
+            -H "Authorization: Bearer $KEY" \
+            "$TARGET_URL")
 
-          echo "Supabase keepalive ping successful!"
+          echo "Supabase HTTP response status: $HTTP_STATUS"
+
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 500 ]; then
+            echo "Supabase keepalive ping successful! (HTTP $HTTP_STATUS)"
+            exit 0
+          else
+            echo "Error: Received HTTP $HTTP_STATUS from Supabase"
+            exit 1
+          fi
