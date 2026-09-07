@@ -7,6 +7,7 @@ import { AppError } from "../shared/errors/app-error.js";
 import { AudienceSegmentService } from "./audience-segment.service.js";
 import { EmailDispatchService } from "./email/email-dispatch.service.js";
 import { SmsRecipientResolverService } from "./sms/sms-recipient-resolver.service.js";
+import { createClient } from "@supabase/supabase-js";
 import { AwsBillingService } from "./aws-billing.service.js";
 import type { SmsQueueState, SmsRecipient } from "./sms/sms.types.js";
 
@@ -781,5 +782,51 @@ export class CampaignService {
         estimatedCostUsd: Number(campaign.estimatedCost)
       }))
     };
+  }
+
+  async uploadImage(input: { fileDataUrl: string; fileName?: string }) {
+    console.info("[CampaignService] uploadImage called", { fileName: input.fileName });
+    const config = getConfig();
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || config.SUPABASE_PUBLISHABLE_KEY;
+    const supabaseUrl = config.SUPABASE_URL;
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false }
+    });
+
+    const match = /^data:(image\/[a-zA-Z+]+);base64,(.+)$/s.exec(input.fileDataUrl);
+    if (!match) {
+      throw new AppError(400, "Formato de imagem inválido. Esperado string Base64 Data URL.");
+    }
+
+    const mimeType = match[1];
+    const base64Data = match[2];
+    const buffer = Buffer.from(base64Data, "base64");
+
+    const ext = input.fileName?.split('.').pop() || (mimeType.includes("png") ? "png" : "jpg");
+    const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const path = `emails/${filename}`;
+    const bucket = "campaign-images";
+
+    try {
+      await supabase.storage.createBucket(bucket, { public: true });
+    } catch {
+      // Bucket já existente
+    }
+
+    const { error } = await supabase.storage.from(bucket).upload(path, buffer, {
+      contentType: mimeType,
+      upsert: true
+    });
+
+    if (error) {
+      console.error("[CampaignService] uploadImage Supabase storage error:", error);
+      throw new AppError(500, `Falha ao salvar imagem no Storage: ${error.message}`);
+    }
+
+    const { data: publicData } = supabase.storage.from(bucket).getPublicUrl(path);
+    console.info("[CampaignService] uploadImage success", { publicUrl: publicData.publicUrl });
+
+    return { url: publicData.publicUrl };
   }
 }

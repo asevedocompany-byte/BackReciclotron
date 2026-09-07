@@ -18,12 +18,7 @@ function safeIsoDate(val: unknown): string {
 
 export class CollectionPointRepository implements ICollectionPointRepository {
   private mapToContract(item: Store): CollectionPoint {
-    const addrParts = [];
-    if (item.saddress1) addrParts.push(item.saddress1);
-    if (item.saddress2) addrParts.push(item.saddress2);
-    if (item.szip) addrParts.push(`CEP: ${item.szip}`);
-    if (item.sstate) addrParts.push(item.sstate);
-    const address = addrParts.join(", ");
+    const address = item.saddress1 || "";
 
     const descParts = [];
     if (item.comments) descParts.push(item.comments);
@@ -46,6 +41,11 @@ export class CollectionPointRepository implements ICollectionPointRepository {
       city: item.scity || "Sem Informação",
       description,
       address: address || "Sem endereço",
+      address2: item.saddress2 || "",
+      bairro: "",
+      zip: item.szip || "",
+      state: item.sstate || "",
+      country: "Brasil",
       active: item.status === 1,
       createdAt: safeIsoDate(item.sdatesince),
       updatedAt: safeIsoDate(item.supdatedate)

@@ -59,6 +59,20 @@ export class CampaignController {
     return reply.code(201).send(await service.create(payload));
   }
 
+  async uploadImage(request: FastifyRequest, reply: FastifyReply) {
+    console.info("[CampaignController] uploadImage called");
+    const service = this.createService(request);
+    const body = (request.body ?? {}) as { fileDataUrl?: string; fileName?: string };
+    if (!body.fileDataUrl) {
+      return reply.code(400).send({ message: "fileDataUrl é obrigatório." });
+    }
+    const result = await service.uploadImage({
+      fileDataUrl: body.fileDataUrl,
+      fileName: body.fileName
+    });
+    return reply.send(result);
+  }
+
   async delete(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
     console.info("[CampaignController] delete called", { campaignId: request.params.id });
     const service = this.createService(request);

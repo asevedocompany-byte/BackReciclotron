@@ -152,12 +152,64 @@ function buildMimeMessage(input: {
   return lines.join("\r\n");
 }
 
+function wrapHtmlInEmailTemplate(htmlBody: string, subject?: string): string {
+  if (/<!DOCTYPE|<html/i.test(htmlBody)) {
+    return htmlBody;
+  }
+
+  const title = subject || "RecicloPontos";
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+  <style>
+    body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+    img { -ms-interpolation-mode: bicubic; border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; max-width: 100% !important; }
+    table { border-collapse: collapse !important; }
+    body { height: 100% !important; margin: 0 !important; padding: 0 !important; width: 100% !important; background-color: #f1f5f9; font-family: Arial, Helvetica, sans-serif; color: #334155; }
+    p { margin: 0 0 16px 0; line-height: 1.6; }
+  </style>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: Arial, Helvetica, sans-serif; -webkit-font-smoothing: antialiased;">
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f1f5f9; padding: 32px 16px;">
+    <tr>
+      <td align="center">
+        <!-- Container de folha de e-mail (600px de largura) -->
+        <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); overflow: hidden;">
+          <tr>
+            <td style="padding: 32px; font-size: 16px; line-height: 1.6; color: #1e293b;">
+              ${htmlBody}
+            </td>
+          </tr>
+        </table>
+        <!-- Rodapé -->
+        <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; margin-top: 20px;">
+          <tr>
+            <td align="center" style="font-size: 12px; color: #94a3b8; line-height: 1.5; font-family: Arial, Helvetica, sans-serif;">
+              RecicloPontos &copy; ${new Date().getFullYear()} — Todos os direitos reservados.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
 export class AmazonSesEmailAdapter {
   private readonly client = createClient();
   private readonly config = getConfig();
 
   async sendEmail(input: SendSesEmailInput): Promise<SendSesEmailResult> {
     if (!this.config.SES_FROM_EMAIL) throw new Error("SES_FROM_EMAIL nao configurado.");
+
+    const formattedSubject = input.subject?.trim() || "Reciclotron";
+    const wrappedHtml = wrapHtmlInEmailTemplate(input.message, formattedSubject);
 
     console.info("[SES][AmazonSesEmailAdapter] sendEmail called", {
       recipient: input.recipient,
@@ -167,7 +219,7 @@ export class AmazonSesEmailAdapter {
       fromName: this.config.SES_FROM_NAME,
       replyToEmail: this.config.SES_REPLY_TO_EMAIL ?? null,
       configurationSet: this.config.SES_CONFIGURATION_SET ?? null,
-      subject: input.subject?.trim() || "Reciclotron",
+      subject: formattedSubject,
       messageLength: input.message.length,
       attachmentsCount: input.attachments?.length ?? 0
     });
@@ -176,8 +228,8 @@ export class AmazonSesEmailAdapter {
       from: formatFromHeader(this.config.SES_FROM_NAME, this.config.SES_FROM_EMAIL),
       replyTo: this.config.SES_REPLY_TO_EMAIL ?? null,
       to: input.recipient,
-      subject: input.subject?.trim() || "Reciclotron",
-      html: input.message,
+      subject: formattedSubject,
+      html: wrappedHtml,
       text: stripHtml(input.message),
       attachments: input.attachments ?? []
     });

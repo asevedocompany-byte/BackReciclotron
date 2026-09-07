@@ -22,6 +22,7 @@ export type PartnerStoreWriteData = {
   cStoreId?: number | null;
   categoria?: number | null;
   active?: boolean;
+  country?: string;
 };
 
 function createLegacyToken(prefix: string) {

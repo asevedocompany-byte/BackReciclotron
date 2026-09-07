@@ -19,6 +19,7 @@ export class PartnerStoreRepository implements IPartnerStoreRepository {
       bairro: item.bairro,
       zip: item.zip,
       state: item.state,
+      country: "Brasil",
       phone1: item.phone1,
       phone: item.phone,
       phone31: item.phone31,

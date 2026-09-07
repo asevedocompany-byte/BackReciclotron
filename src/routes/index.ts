@@ -53,6 +53,7 @@ export async function registerRoutes(app: FastifyInstance) {
     privateApp.get('/campaigns/quota-billing', campaigns.getQuotaBilling.bind(campaigns));
     privateApp.get('/campaigns/sms-cost-control', campaigns.getSmsCostControl.bind(campaigns));
     privateApp.post('/campaigns', campaigns.create.bind(campaigns));
+    privateApp.post('/campaigns/upload-image', campaigns.uploadImage.bind(campaigns));
     privateApp.post('/campaigns/:id/send', campaigns.send.bind(campaigns));
     privateApp.get('/campaigns/:id/status', campaigns.getStatus.bind(campaigns));
     privateApp.get('/campaigns/:id/status/stream', campaigns.streamStatus.bind(campaigns));

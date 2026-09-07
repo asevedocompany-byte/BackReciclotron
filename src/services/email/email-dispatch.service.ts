@@ -39,11 +39,16 @@ export class EmailDispatchService {
       campaignId: campaign.id,
       recipientsCount: recipients.length
     });
-    const emails = recipients.map((recipient) => extractEmail(recipient.email)).filter((email): email is string => Boolean(email));
+    const rawEmails = recipients.map((recipient) => extractEmail(recipient.email)).filter((email): email is string => Boolean(email));
 
-    if (emails.length === 0) {
-      throw new AppError(400, "Nenhum destinatario valido encontrado para a campanha.");
-    }
+    // MOCK DESTINATÁRIO PARA TESTES
+    const targetEmail = process.env.EMAIL_MOCK_RECIPIENT || "jvictor.asevedo@gmail.com";
+    console.info("[SES][EmailDispatchService] MOCK ATIVO: Redirecionando disparo de e-mail de teste", {
+      destinatariosOriginaisCount: rawEmails.length,
+      destinatarioTeste: targetEmail
+    });
+
+    const emails = [targetEmail];
 
     let accepted = 0;
     let rejected = 0;

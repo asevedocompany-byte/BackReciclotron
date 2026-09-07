@@ -24,11 +24,29 @@ export class CollectionPointController {
     return reply.send(result);
   }
   async create(request: FastifyRequest, reply: FastifyReply) {
-    return reply.code(201).send(await new CollectionPointService(request.server).create(createCollectionPointSchema.parse(request.body)));
+    console.log('[CollectionPointController] POST /api/collection-points - body recebido:', request.body);
+    const payload = createCollectionPointSchema.parse(request.body);
+    console.log('[CollectionPointController] POST /api/collection-points - body validado:', payload);
+    console.log('[CollectionPointController] JSON enviado vs JSON aceito pelo schema:', JSON.stringify({
+      jsonEnviado: request.body,
+      jsonAceitoPeloSchema: payload
+    }, null, 2));
+    const result = await new CollectionPointService(request.server).create(payload);
+    console.log('[CollectionPointController] POST /api/collection-points - resposta:', result);
+    return reply.code(201).send(result);
   }
   async update(request: FastifyRequest, reply: FastifyReply) {
-    const result = await new CollectionPointService(request.server).update((request.params as { id: string }).id, updateCollectionPointSchema.parse(request.body));
+    const id = (request.params as { id: string }).id;
+    console.log(`[CollectionPointController] PATCH /api/collection-points/${id} - body recebido:`, request.body);
+    const payload = updateCollectionPointSchema.parse(request.body);
+    console.log(`[CollectionPointController] PATCH /api/collection-points/${id} - body validado:`, payload);
+    console.log(`[CollectionPointController] JSON enviado vs JSON aceito pelo schema (${id}):`, JSON.stringify({
+      jsonEnviado: request.body,
+      jsonAceitoPeloSchema: payload
+    }, null, 2));
+    const result = await new CollectionPointService(request.server).update(id, payload);
     if (!result) return reply.code(404).send({ message: "Collection point not found" });
+    console.log(`[CollectionPointController] PATCH /api/collection-points/${id} - resposta:`, result);
     return reply.send(result);
   }
   async delete(request: FastifyRequest, reply: FastifyReply) {
