@@ -41,14 +41,18 @@ export class EmailDispatchService {
     });
     const rawEmails = recipients.map((recipient) => extractEmail(recipient.email)).filter((email): email is string => Boolean(email));
 
-    // MOCK DESTINATÁRIO PARA TESTES
-    const targetEmail = process.env.EMAIL_MOCK_RECIPIENT || "jvictor.asevedo@gmail.com";
-    console.info("[SES][EmailDispatchService] MOCK ATIVO: Redirecionando disparo de e-mail de teste", {
-      destinatariosOriginaisCount: rawEmails.length,
-      destinatarioTeste: targetEmail
-    });
+    const emails = rawEmails;
 
-    const emails = [targetEmail];
+    if (process.env.EMAIL_DRY_RUN === "true") {
+      console.info("[SES][EmailDispatchService] DRY RUN ativo: nenhum e-mail será enviado", {
+        destinatarios: emails
+      });
+      return {
+        providerMessageId: "dry-run",
+        accepted: emails.length,
+        rejected: 0
+      };
+    }
 
     let accepted = 0;
     let rejected = 0;
